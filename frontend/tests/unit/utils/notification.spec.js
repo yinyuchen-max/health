@@ -31,7 +31,8 @@ describe('Notification Manager', () => {
       })
   })
 
-  afterEach() {
+  afterEach()
+  {
     // 恢复原始Notification对象
     global.Notification = originalNotification
     localStorage.clear()
