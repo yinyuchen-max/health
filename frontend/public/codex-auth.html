@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auth Redirect</title>
+</head>
+<body>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get('target') || '/app/dashboard';
+    const userInfo = {
+      id: 1,
+      username: params.get('admin') === '1' ? 'admin' : 'demo_user',
+      email: 'demo@health-system.com',
+      phone: '13800000000',
+      gender: 1,
+      age: 24,
+      height: 175,
+      weight: 69.5,
+      status: 1
+    };
+
+    localStorage.setItem('token', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJkZW1vX3VzZXIiLCJyb2xlIjoidXNlciJ9.c2lnbmF0dXJl');
+    localStorage.setItem('userInfo', JSON.stringify(userInfo));
+    window.location.replace(target);
+  </script>
+</body>
+</html>
