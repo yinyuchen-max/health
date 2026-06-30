@@ -42,6 +42,10 @@
           <el-icon><Opportunity /></el-icon>
           <span>智能健康</span>
         </el-menu-item>
+        <el-menu-item index="/app/ai-chat">
+          <el-icon><ChatDotRound /></el-icon>
+          <span>AI 对话</span>
+        </el-menu-item>
         <el-menu-item index="/app/profile">
           <el-icon><User /></el-icon>
           <span>个人信息</span>
@@ -84,6 +88,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
 import {
   Bell,
+  ChatDotRound,
   Clock,
   Document,
   HomeFilled,

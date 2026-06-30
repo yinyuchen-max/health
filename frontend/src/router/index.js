@@ -69,6 +69,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'ai-chat',
+        name: 'AiChat',
+        component: () => import('../views/AiChat.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'user-management',
         name: 'UserManagement',
         component: () => import('../views/UserManagement.vue'),

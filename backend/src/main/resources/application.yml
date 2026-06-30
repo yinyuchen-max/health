@@ -17,6 +17,11 @@ spring:
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
 
+
+  mvc:
+   pathmatch:
+      matching-strategy: ant_path_matcher
+
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
@@ -42,8 +47,26 @@ jwt:
   secret: healthsystemsecretkey-healthsystemsecretkey-2026
   expiration: 86400000
 
+# LangChain4j AI 配置
+langchain4j:
+  openai:
+    api-key: ${DASHSCOPE_API_KEY:api-key}
+    model-name: deepseek-v4-flash
+    base-url: https://api.deepseek.com/v1
+    temperature: 0.3
+    timeout: 60
+  # 国内模型也支持，可切换为:
+  # openai:
+  #   api-key: ${DASHSCOPE_API_KEY:sk-your-key}
+  #   model-name: qwen-plus
+  #   base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  fallback:
+    enabled: true  # AI 不可用时自动回退到规则引擎
+
 # 日志配置
 logging:
   level:
     com.health: DEBUG
     org.springframework.security: DEBUG
+    dev.langchain4j: INFO
+

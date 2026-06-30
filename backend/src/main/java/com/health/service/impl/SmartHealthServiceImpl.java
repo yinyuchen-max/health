@@ -1,6 +1,8 @@
 package com.health.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.health.domain.dto.ExercisePlanDTO;
 import com.health.domain.dto.HealthRiskAssessmentDTO;
 import com.health.domain.dto.NutritionAdviceDTO;
@@ -14,6 +16,10 @@ import com.health.mapper.HealthRecordMapper;
 import com.health.mapper.SportRecordMapper;
 import com.health.mapper.UserMapper;
 import com.health.service.SmartHealthService;
+import dev.langchain4j.model.chat.ChatModel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -27,24 +33,35 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 public class SmartHealthServiceImpl implements SmartHealthService {
 
+    private static final Logger log = LoggerFactory.getLogger(SmartHealthServiceImpl.class);
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final HealthRecordMapper healthRecordMapper;
     private final SportRecordMapper sportRecordMapper;
     private final UserMapper userMapper;
+    private final ChatModel chatModel;
+    private final ObjectMapper objectMapper;
+
+    @Value("${langchain4j.fallback.enabled:true}")
+    private boolean fallbackEnabled;
 
     public SmartHealthServiceImpl(
             HealthRecordMapper healthRecordMapper,
             SportRecordMapper sportRecordMapper,
-            UserMapper userMapper
+            UserMapper userMapper,
+            ChatModel chatModel,
+            ObjectMapper objectMapper
     ) {
         this.healthRecordMapper = healthRecordMapper;
         this.sportRecordMapper = sportRecordMapper;
         this.userMapper = userMapper;
+        this.chatModel = chatModel;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -61,6 +78,15 @@ public class SmartHealthServiceImpl implements SmartHealthService {
                 ? latestHealthRecord.getBloodSugar().doubleValue()
                 : null;
 
+        // 优先尝试 AI 生成健康报告
+        SmartHealthOverviewDTO aiResult = tryGenerateWithAI(user, healthRecords, sportRecords,
+                bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord);
+        if (aiResult != null) {
+            return aiResult;
+        }
+
+        // AI 不可用，回退到规则引擎
+        log.info("使用规则引擎生成健康报告, userId={}", userId);
         SmartHealthOverviewDTO overview = new SmartHealthOverviewDTO();
         overview.setUserId(userId);
         overview.setGeneratedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
@@ -474,5 +500,201 @@ public class SmartHealthServiceImpl implements SmartHealthService {
 
     private double round(double value) {
         return BigDecimal.valueOf(value).setScale(1, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    // ==================== AI 增强方法 ====================
+
+    /**
+     * 尝试使用 AI 生成健康报告，失败时返回 null 触发规则引擎回退
+     */
+    private SmartHealthOverviewDTO tryGenerateWithAI(
+            User user,
+            List<HealthRecord> healthRecords,
+            List<SportRecord> sportRecords,
+            Double bmi,
+            Integer weeklyExerciseMinutes,
+            Double avgHeartRate,
+            Double latestBloodSugar,
+            HealthRecord latestHealthRecord
+    ) {
+        if (chatModel == null) {
+            log.debug("ChatModel 未配置，跳过 AI 生成");
+            return null;
+        }
+
+        try {
+            log.info("开始 AI 生成健康报告, userId={}", user.getId());
+            String prompt = buildAIPrompt(user, healthRecords, sportRecords,
+                    bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord);
+
+            String aiResponse = chatModel.chat(prompt);
+            log.debug("AI 原始响应长度: {}", aiResponse != null ? aiResponse.length() : 0);
+
+            SmartHealthOverviewDTO result = parseAIResponse(aiResponse, user.getId());
+            log.info("AI 健康报告生成成功, userId={}", user.getId());
+            return result;
+        } catch (Exception e) {
+            log.warn("AI 生成健康报告失败，将回退到规则引擎: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 构建发送给 AI 的详细 Prompt
+     */
+    private String buildAIPrompt(
+            User user,
+            List<HealthRecord> healthRecords,
+            List<SportRecord> sportRecords,
+            Double bmi,
+            Integer weeklyExerciseMinutes,
+            Double avgHeartRate,
+            Double latestBloodSugar,
+            HealthRecord latestHealthRecord
+    ) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("你是一位资深健康管理顾问和全科医生。请根据以下用户的健康数据，生成一份专业、个性化的健康评估报告。\n\n");
+
+        // 用户基本信息
+        sb.append("## 用户基本信息\n");
+        sb.append(String.format("- 年龄: %d 岁\n", user.getAge() != null ? user.getAge() : 0));
+        sb.append(String.format("- 性别: %s\n", user.getGender() != null && user.getGender() == 1 ? "男" : "女"));
+        sb.append(String.format("- 身高: %.1f cm\n", user.getHeight() != null ? user.getHeight() : 0));
+        sb.append(String.format("- 体重: %.1f kg\n", user.getWeight() != null ? user.getWeight() : 0));
+        sb.append(String.format("- BMI: %s\n", bmi != null ? String.format(Locale.US, "%.1f", bmi) : "数据不足"));
+        sb.append("\n");
+
+        // 最新健康指标
+        sb.append("## 最新健康指标\n");
+        if (latestHealthRecord != null) {
+            sb.append(String.format("- 收缩压: %s mmHg\n",
+                    latestHealthRecord.getBloodPressureSystolic() != null
+                            ? String.format(Locale.US, "%.0f", latestHealthRecord.getBloodPressureSystolic()) : "未记录"));
+            sb.append(String.format("- 舒张压: %s mmHg\n",
+                    latestHealthRecord.getBloodPressureDiastolic() != null
+                            ? String.format(Locale.US, "%.0f", latestHealthRecord.getBloodPressureDiastolic()) : "未记录"));
+            sb.append(String.format("- 静息心率: %s bpm\n",
+                    latestHealthRecord.getHeartRate() != null ? latestHealthRecord.getHeartRate().toString() : "未记录"));
+            sb.append(String.format("- 血糖: %s mmol/L\n",
+                    latestBloodSugar != null ? String.format(Locale.US, "%.1f", latestBloodSugar) : "未记录"));
+        } else {
+            sb.append("暂无健康指标记录\n");
+        }
+        if (avgHeartRate != null && !avgHeartRate.isNaN()) {
+            sb.append(String.format("- 近期平均心率: %.1f bpm\n", avgHeartRate));
+        }
+        sb.append("\n");
+
+        // 运动数据
+        sb.append("## 运动数据\n");
+        sb.append(String.format("- 本周运动总时长: %d 分钟\n", weeklyExerciseMinutes != null ? weeklyExerciseMinutes : 0));
+        sb.append(String.format("- 运动记录数(近一周): %d 条\n", sportRecords.size()));
+        if (!sportRecords.isEmpty()) {
+            sb.append("- 近期运动详情:\n");
+            sportRecords.stream().limit(5).forEach(r ->
+                    sb.append(String.format("  · %s: %s %d分钟 %s强度\n",
+                            r.getRecordDate(), r.getSportType(),
+                            r.getDuration() != null ? r.getDuration() : 0,
+                            r.getIntensity() != null ? r.getIntensity() : "未知"))
+            );
+        }
+        sb.append("\n");
+
+        // 历史健康趋势
+        sb.append("## 历史健康数据趋势\n");
+        if (!healthRecords.isEmpty()) {
+            sb.append(String.format("共 %d 条历史健康记录\n", healthRecords.size()));
+            healthRecords.stream().limit(7).forEach(r ->
+                    sb.append(String.format("  · %s: 血压%.0f/%.0f 心率%d 血糖%s\n",
+                            r.getRecordDate(),
+                            r.getBloodPressureSystolic() != null ? r.getBloodPressureSystolic() : 0,
+                            r.getBloodPressureDiastolic() != null ? r.getBloodPressureDiastolic() : 0,
+                            r.getHeartRate() != null ? r.getHeartRate() : 0,
+                            r.getBloodSugar() != null ? r.getBloodSugar().toString() : "-"))
+            );
+        } else {
+            sb.append("暂无历史健康记录\n");
+        }
+        sb.append("\n");
+
+        // 输出格式要求
+        sb.append("## 输出要求\n");
+        sb.append("请严格返回以下 JSON 格式（不要包含 markdown 代码块标记），所有字段均为必填：\n\n");
+        sb.append("{\n");
+        sb.append("  \"bmi\": 数值(保留1位小数),\n");
+        sb.append("  \"overallStatus\": \"整体状态稳定\" 或 \"建议持续改善\" 或 \"需要重点干预\",\n");
+        sb.append("  \"riskAssessments\": [\n");
+        sb.append("    {\n");
+        sb.append("      \"assessmentType\": \"BMI\",\n");
+        sb.append("      \"riskScore\": 0-100的风险分数,\n");
+        sb.append("      \"riskLevel\": \"LOW\" 或 \"MEDIUM\" 或 \"HIGH\",\n");
+        sb.append("      \"summary\": \"该维度评估总结(1-2句话)\",\n");
+        sb.append("      \"recommendations\": [\"建议1\", \"建议2\"]\n");
+        sb.append("    }\n");
+        sb.append("  ],\n");
+        sb.append("  \"nutritionAdvice\": {\n");
+        sb.append("    \"title\": \"个性化饮食建议\",\n");
+        sb.append("    \"summary\": \"饮食建议总结\",\n");
+        sb.append("    \"dailyCalories\": 推荐每日热量(整数),\n");
+        sb.append("    \"recommendations\": [\"饮食建议1\", \"饮食建议2\"]\n");
+        sb.append("  },\n");
+        sb.append("  \"exercisePlan\": {\n");
+        sb.append("    \"goal\": \"运动目标描述\",\n");
+        sb.append("    \"intensity\": \"运动强度描述\",\n");
+        sb.append("    \"weeklyMinutesTarget\": 每周目标分钟数(整数),\n");
+        sb.append("    \"weeklyPlan\": [\"周一计划\", \"周三计划\", \"周五计划\", \"周末计划\"]\n");
+        sb.append("  },\n");
+        sb.append("  \"sleepInsight\": {\n");
+        sb.append("    \"score\": 0-100的睡眠质量分数,\n");
+        sb.append("    \"summary\": \"睡眠质量总结\",\n");
+        sb.append("    \"recommendations\": [\"睡眠建议1\", \"睡眠建议2\"]\n");
+        sb.append("  },\n");
+        sb.append("  \"stressInsight\": {\n");
+        sb.append("    \"score\": 0-100的压力分数,\n");
+        sb.append("    \"level\": \"LOW\" 或 \"MEDIUM\" 或 \"HIGH\",\n");
+        sb.append("    \"summary\": \"压力评估总结\",\n");
+        sb.append("    \"recommendations\": [\"减压建议1\", \"减压建议2\"]\n");
+        sb.append("  },\n");
+        sb.append("  \"quickTips\": [\"快速提示1\", \"快速提示2\", \"快速提示3\"]\n");
+        sb.append("}\n\n");
+
+        sb.append("## 重要约束\n");
+        sb.append("1. riskAssessments 必须包含四个维度: BMI、BLOOD_PRESSURE、DIABETES、CARDIO\n");
+        sb.append("2. 所有建议必须具体、可执行，结合用户的实际数据\n");
+        sb.append("3. 用中文输出所有文本内容\n");
+        sb.append("4. 如果某项数据缺失，基于现有数据做合理推断，并在 summary 中说明\n");
+
+        return sb.toString();
+    }
+
+    /**
+     * 解析 AI 返回的 JSON 并填充系统字段
+     */
+    private SmartHealthOverviewDTO parseAIResponse(String aiResponse, Long userId) throws JsonProcessingException {
+        // 清理可能的 markdown 代码块标记
+        String json = aiResponse.trim();
+        if (json.startsWith("```json")) {
+            json = json.substring(7);
+        } else if (json.startsWith("```")) {
+            json = json.substring(3);
+        }
+        if (json.endsWith("```")) {
+            json = json.substring(0, json.length() - 3);
+        }
+        json = json.trim();
+
+        SmartHealthOverviewDTO result = objectMapper.readValue(json, SmartHealthOverviewDTO.class);
+        result.setUserId(userId);
+        result.setGeneratedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+
+        // 校验并补齐缺失字段
+        if (result.getRiskAssessments() == null) {
+            result.setRiskAssessments(new ArrayList<>());
+        }
+        if (result.getQuickTips() == null) {
+            result.setQuickTips(new ArrayList<>());
+        }
+
+        return result;
     }
 }
