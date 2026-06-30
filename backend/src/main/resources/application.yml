@@ -50,7 +50,7 @@ jwt:
 # LangChain4j AI 配置
 langchain4j:
   openai:
-    api-key: ${DASHSCOPE_API_KEY:sk-10d1399823504ac8aad07e83a328c549}
+    api-key: ${DASHSCOPE_API_KEY:----}
     model-name: deepseek-v4-flash
     base-url: https://api.deepseek.com/v1
     temperature: 0.3
