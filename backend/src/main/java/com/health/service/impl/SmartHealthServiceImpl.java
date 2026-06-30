@@ -33,6 +33,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -49,6 +52,9 @@ public class SmartHealthServiceImpl implements SmartHealthService {
 
     @Value("${langchain4j.fallback.enabled:true}")
     private boolean fallbackEnabled;
+
+    @Value("${langchain4j.fallback.ai-timeout-ms:3000}")
+    private long aiTimeoutMs;
 
     public SmartHealthServiceImpl(
             HealthRecordMapper healthRecordMapper,
@@ -522,21 +528,57 @@ public class SmartHealthServiceImpl implements SmartHealthService {
             return null;
         }
 
+        if (!fallbackEnabled) {
+            log.debug("AI 回退开关已关闭，直接执行 AI 生成");
+            try {
+                return generateOverviewWithAI(user, healthRecords, sportRecords,
+                        bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord);
+            } catch (Exception e) {
+                log.warn("AI 生成健康报告失败，将回退到规则引擎: {}", e.getMessage());
+                return null;
+            }
+        }
+
         try {
-            log.info("开始 AI 生成健康报告, userId={}", user.getId());
-            String prompt = buildAIPrompt(user, healthRecords, sportRecords,
-                    bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord);
-
-            String aiResponse = chatModel.chat(prompt);
-            log.debug("AI 原始响应长度: {}", aiResponse != null ? aiResponse.length() : 0);
-
-            SmartHealthOverviewDTO result = parseAIResponse(aiResponse, user.getId());
-            log.info("AI 健康报告生成成功, userId={}", user.getId());
-            return result;
-        } catch (Exception e) {
-            log.warn("AI 生成健康报告失败，将回退到规则引擎: {}", e.getMessage());
+            return CompletableFuture.supplyAsync(() -> {
+                try {
+                    return generateOverviewWithAI(user, healthRecords, sportRecords,
+                            bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord);
+                } catch (Exception e) {
+                    throw new CompletionException(e);
+                }
+            }).orTimeout(aiTimeoutMs, TimeUnit.MILLISECONDS).exceptionally(e -> {
+                Throwable cause = e instanceof CompletionException && e.getCause() != null ? e.getCause() : e;
+                log.warn("AI 生成健康报告失败，将回退到规则引擎: {}", cause.getMessage());
+                return null;
+            }).join();
+        } catch (CompletionException e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            log.warn("AI 生成健康报告失败，将回退到规则引擎: {}", cause.getMessage());
             return null;
         }
+    }
+
+    private SmartHealthOverviewDTO generateOverviewWithAI(
+            User user,
+            List<HealthRecord> healthRecords,
+            List<SportRecord> sportRecords,
+            Double bmi,
+            Integer weeklyExerciseMinutes,
+            Double avgHeartRate,
+            Double latestBloodSugar,
+            HealthRecord latestHealthRecord
+    ) throws JsonProcessingException {
+        log.info("开始 AI 生成健康报告, userId={}", user.getId());
+        String prompt = buildAIPrompt(user, healthRecords, sportRecords,
+                bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord);
+
+        String aiResponse = chatModel.chat(prompt);
+        log.debug("AI 原始响应长度: {}", aiResponse != null ? aiResponse.length() : 0);
+
+        SmartHealthOverviewDTO result = parseAIResponse(aiResponse, user.getId());
+        log.info("AI 健康报告生成成功, userId={}", user.getId());
+        return result;
     }
 
     /**

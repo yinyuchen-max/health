@@ -11,6 +11,19 @@
       </div>
     </el-card>
 
+    <el-alert
+      v-if="loading"
+      class="analysis-loading-banner"
+      title="AI 大模型分析中"
+      type="info"
+      :closable="false"
+      show-icon
+    >
+      <template #default>
+        正在结合健康记录与运动数据生成智能评估，请稍候…
+      </template>
+    </el-alert>
+
     <el-row :gutter="16">
       <el-col :xs="24" :xl="14">
         <el-card class="chart-card">
@@ -125,10 +138,12 @@ import * as echarts from 'echarts'
 import request from '../utils/request'
 import { useUserStore } from '../store/user'
 import { useAnalyticsStore } from '../store/analytics'
+import { ElMessage } from 'element-plus'
 
 const userStore = useUserStore()
 const analyticsStore = useAnalyticsStore()
 const overview = ref(null)
+const loading = ref(false)
 
 const riskChartRef = ref(null)
 const recoveryChartRef = ref(null)
@@ -372,13 +387,34 @@ const resizeCharts = () => {
 
 const refreshData = async () => {
   const userId = userStore.userInfo?.id || 1
-  const [overviewResponse] = await Promise.all([
-    request.get('/smart-health/overview', {
-      params: { userId }
-    }),
-    analyticsStore.fetchSportRecords(userId, { pageNum: 1, pageSize: 1000 })
-  ])
-  overview.value = overviewResponse.data
+  console.log('刷新智能健康数据, userId:', userId)
+  loading.value = true
+
+  try {
+    // 并行获取数据
+    const [overviewResponse, sportRecordsResponse] = await Promise.all([
+      request.get('/smart-health/overview', {
+        params: { userId }
+      }),
+      analyticsStore.fetchSportRecords(userId, { pageNum: 1, pageSize: 1000 })
+    ])
+
+    console.log('智能健康概览响应:', overviewResponse)
+    console.log('运动记录响应:', sportRecordsResponse)
+
+    if (overviewResponse && overviewResponse.data) {
+      overview.value = overviewResponse.data
+      console.log('设置后的 overview:', overview.value)
+    } else {
+      console.error('智能健康概览数据为空')
+      ElMessage.warning('未能加载智能健康数据，请检查后端服务是否正常运行')
+    }
+  } catch (error) {
+    console.error('加载智能健康数据失败:', error)
+    ElMessage.error('加载智能健康数据失败：' + (error.message || '未知错误'))
+  } finally {
+    loading.value = false
+  }
 }
 
 watch([riskData, recoveryMetrics], async () => {
@@ -411,6 +447,11 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.analysis-loading-banner {
+  border: none;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.12), rgba(16, 185, 129, 0.12));
 }
 
 .page-hero {
