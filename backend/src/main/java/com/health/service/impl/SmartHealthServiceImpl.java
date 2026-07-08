@@ -15,10 +15,12 @@ import com.health.domain.entity.User;
 import com.health.mapper.HealthRecordMapper;
 import com.health.mapper.SportRecordMapper;
 import com.health.mapper.UserMapper;
+import com.health.service.HealthKnowledgeRagService;
 import com.health.service.SmartHealthService;
 import dev.langchain4j.model.chat.ChatModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -49,6 +51,7 @@ public class SmartHealthServiceImpl implements SmartHealthService {
     private final UserMapper userMapper;
     private final ChatModel chatModel;
     private final ObjectMapper objectMapper;
+    private final HealthKnowledgeRagService healthKnowledgeRagService;
 
     @Value("${langchain4j.fallback.enabled:true}")
     private boolean fallbackEnabled;
@@ -63,11 +66,25 @@ public class SmartHealthServiceImpl implements SmartHealthService {
             ChatModel chatModel,
             ObjectMapper objectMapper
     ) {
+        this(healthRecordMapper, sportRecordMapper, userMapper, chatModel, objectMapper,
+                (user, healthRecords, sportRecords, bmi, weeklyExerciseMinutes) -> List.of());
+    }
+
+    @Autowired
+    public SmartHealthServiceImpl(
+            HealthRecordMapper healthRecordMapper,
+            SportRecordMapper sportRecordMapper,
+            UserMapper userMapper,
+            ChatModel chatModel,
+            ObjectMapper objectMapper,
+            HealthKnowledgeRagService healthKnowledgeRagService
+    ) {
         this.healthRecordMapper = healthRecordMapper;
         this.sportRecordMapper = sportRecordMapper;
         this.userMapper = userMapper;
         this.chatModel = chatModel;
         this.objectMapper = objectMapper;
+        this.healthKnowledgeRagService = healthKnowledgeRagService;
     }
 
     @Override
@@ -83,10 +100,12 @@ public class SmartHealthServiceImpl implements SmartHealthService {
         Double latestBloodSugar = latestHealthRecord != null && latestHealthRecord.getBloodSugar() != null
                 ? latestHealthRecord.getBloodSugar().doubleValue()
                 : null;
+        List<String> retrievedKnowledge = healthKnowledgeRagService.retrieveRelevantKnowledge(
+                user, healthRecords, sportRecords, bmi, weeklyExerciseMinutes);
 
         // 优先尝试 AI 生成健康报告
         SmartHealthOverviewDTO aiResult = tryGenerateWithAI(user, healthRecords, sportRecords,
-                bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord);
+                bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord, retrievedKnowledge);
         if (aiResult != null) {
             return aiResult;
         }
@@ -521,7 +540,8 @@ public class SmartHealthServiceImpl implements SmartHealthService {
             Integer weeklyExerciseMinutes,
             Double avgHeartRate,
             Double latestBloodSugar,
-            HealthRecord latestHealthRecord
+            HealthRecord latestHealthRecord,
+            List<String> retrievedKnowledge
     ) {
         if (chatModel == null) {
             log.debug("ChatModel 未配置，跳过 AI 生成");
@@ -532,7 +552,7 @@ public class SmartHealthServiceImpl implements SmartHealthService {
             log.debug("AI 回退开关已关闭，直接执行 AI 生成");
             try {
                 return generateOverviewWithAI(user, healthRecords, sportRecords,
-                        bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord);
+                        bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord, retrievedKnowledge);
             } catch (Exception e) {
                 log.warn("AI 生成健康报告失败，将回退到规则引擎: {}", e.getMessage());
                 return null;
@@ -543,7 +563,7 @@ public class SmartHealthServiceImpl implements SmartHealthService {
             return CompletableFuture.supplyAsync(() -> {
                 try {
                     return generateOverviewWithAI(user, healthRecords, sportRecords,
-                            bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord);
+                            bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord, retrievedKnowledge);
                 } catch (Exception e) {
                     throw new CompletionException(e);
                 }
@@ -567,11 +587,12 @@ public class SmartHealthServiceImpl implements SmartHealthService {
             Integer weeklyExerciseMinutes,
             Double avgHeartRate,
             Double latestBloodSugar,
-            HealthRecord latestHealthRecord
+            HealthRecord latestHealthRecord,
+            List<String> retrievedKnowledge
     ) throws JsonProcessingException {
         log.info("开始 AI 生成健康报告, userId={}", user.getId());
         String prompt = buildAIPrompt(user, healthRecords, sportRecords,
-                bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord);
+                bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord, retrievedKnowledge);
 
         String aiResponse = chatModel.chat(prompt);
         log.debug("AI 原始响应长度: {}", aiResponse != null ? aiResponse.length() : 0);
@@ -592,7 +613,8 @@ public class SmartHealthServiceImpl implements SmartHealthService {
             Integer weeklyExerciseMinutes,
             Double avgHeartRate,
             Double latestBloodSugar,
-            HealthRecord latestHealthRecord
+            HealthRecord latestHealthRecord,
+            List<String> retrievedKnowledge
     ) {
         StringBuilder sb = new StringBuilder();
         sb.append("你是一位资深健康管理顾问和全科医生。请根据以下用户的健康数据，生成一份专业、个性化的健康评估报告。\n\n");
@@ -658,6 +680,14 @@ public class SmartHealthServiceImpl implements SmartHealthService {
             sb.append("暂无历史健康记录\n");
         }
         sb.append("\n");
+
+        if (retrievedKnowledge != null && !retrievedKnowledge.isEmpty()) {
+            sb.append("## 检索到的健康知识依据\n");
+            for (int i = 0; i < retrievedKnowledge.size(); i++) {
+                sb.append(i + 1).append(". ").append(retrievedKnowledge.get(i)).append("\n\n");
+            }
+            sb.append("请优先结合以上知识依据和用户真实健康数据生成建议；如果知识依据与用户数据不匹配，以用户真实数据为准。\n\n");
+        }
 
         // 输出格式要求
         sb.append("## 输出要求\n");

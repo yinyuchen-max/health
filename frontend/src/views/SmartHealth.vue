@@ -11,18 +11,46 @@
       </div>
     </el-card>
 
-    <el-alert
-      v-if="loading"
-      class="analysis-loading-banner"
-      title="AI 大模型分析中"
-      type="info"
-      :closable="false"
-      show-icon
-    >
-      <template #default>
-        正在结合健康记录与运动数据生成智能评估，请稍候…
-      </template>
-    </el-alert>
+    <el-card v-if="loading" class="analysis-loading-card" shadow="never">
+      <div class="analysis-loading-shell">
+        <div class="analysis-loading-copy">
+          <p class="analysis-loading-eyebrow">HEALTH AI PIPELINE</p>
+          <div class="analysis-loading-title-row">
+            <h3>AI 大模型分析中</h3>
+            <span class="analysis-loading-pulse"></span>
+          </div>
+          <p class="analysis-loading-text">
+            正在读取健康记录、运动数据与恢复指标，生成本次智能评估与个性化建议。
+          </p>
+          <div class="analysis-loading-tags">
+            <span>风险识别</span>
+            <span>恢复评估</span>
+            <span>饮食建议</span>
+            <span>运动计划</span>
+          </div>
+        </div>
+
+        <div class="analysis-loading-preview">
+          <div class="analysis-loading-preview-header">
+            <span>分析进度</span>
+            <strong>模型推理中</strong>
+          </div>
+          <el-skeleton animated>
+            <template #template>
+              <el-skeleton-item variant="p" style="width: 82%; height: 18px; margin-bottom: 14px;" />
+              <el-skeleton-item variant="p" style="width: 100%; height: 14px; margin-bottom: 10px;" />
+              <el-skeleton-item variant="p" style="width: 93%; height: 14px; margin-bottom: 10px;" />
+              <el-skeleton-item variant="p" style="width: 76%; height: 14px; margin-bottom: 18px;" />
+              <div class="analysis-loading-bars">
+                <el-skeleton-item variant="rect" style="width: 100%; height: 10px;" />
+                <el-skeleton-item variant="rect" style="width: 88%; height: 10px;" />
+                <el-skeleton-item variant="rect" style="width: 94%; height: 10px;" />
+              </div>
+            </template>
+          </el-skeleton>
+        </div>
+      </div>
+    </el-card>
 
     <el-row :gutter="16">
       <el-col :xs="24" :xl="14">
@@ -449,9 +477,125 @@ onBeforeUnmount(() => {
   gap: 16px;
 }
 
-.analysis-loading-banner {
+.analysis-loading-card {
   border: none;
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.12), rgba(16, 185, 129, 0.12));
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 36%),
+    linear-gradient(135deg, #eff6ff, #f8fafc 58%, #ecfeff);
+}
+
+.analysis-loading-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.95fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.analysis-loading-copy,
+.analysis-loading-preview {
+  border-radius: 20px;
+}
+
+.analysis-loading-copy {
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.analysis-loading-eyebrow {
+  margin: 0 0 10px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.analysis-loading-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.analysis-loading-title-row h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 26px;
+}
+
+.analysis-loading-pulse {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 0 rgba(34, 197, 94, 0.45);
+  animation: analysisPulse 1.6s ease-out infinite;
+}
+
+.analysis-loading-text {
+  margin: 0;
+  color: #475569;
+  line-height: 1.7;
+}
+
+.analysis-loading-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.analysis-loading-tags span {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.analysis-loading-preview {
+  padding: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.analysis-loading-preview-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 18px;
+  color: #334155;
+  font-size: 14px;
+}
+
+.analysis-loading-preview-header strong {
+  color: #0f766e;
+  font-size: 13px;
+}
+
+.analysis-loading-bars {
+  display: grid;
+  gap: 10px;
+}
+
+@keyframes analysisPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
+  }
+
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 12px rgba(34, 197, 94, 0);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
 }
 
 .page-hero {
@@ -535,5 +679,20 @@ onBeforeUnmount(() => {
   margin: 0;
   padding-left: 18px;
   color: #334155;
+}
+
+@media (max-width: 960px) {
+  .analysis-loading-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-loading-copy,
+  .analysis-loading-preview {
+    padding: 18px;
+  }
+
+  .analysis-loading-title-row h3 {
+    font-size: 22px;
+  }
 }
 </style>

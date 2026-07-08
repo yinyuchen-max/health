@@ -397,6 +397,107 @@ docker-compose down
 - [MyBatis Plus](https://baomidou.com/)
 - [ECharts](https://echarts.apache.org/)
 
+## RAG 健康知识库说明
+
+当前项目已经接入基于 LangChain4j 的健康知识 RAG，用于在智能健康分析时检索本地 Markdown 健康知识，并把相关片段注入 AI 提示词。
+
+### 实现流程
+
+```text
+backend/src/main/resources/rag/health-knowledge.md
+  -> 按 Markdown 标题切分知识片段
+  -> 使用 EmbeddingModel 生成向量
+  -> 写入 InMemoryEmbeddingStore
+  -> 持久化到 data/rag/health-knowledge-vector-store.json
+  -> 智能健康分析时向量检索相关知识
+  -> 检索结果注入 SmartHealth AI prompt
+```
+
+### 相关依赖
+
+项目没有使用 `langchain4j-easy-rag`，因为当前 `1.17.0` 版本下该 artifact 不可用。RAG 使用 LangChain4j 原生组件完成，相关 Maven 依赖如下：
+
+```xml
+<dependency>
+    <groupId>dev.langchain4j</groupId>
+    <artifactId>langchain4j</artifactId>
+    <version>1.17.0</version>
+</dependency>
+
+<dependency>
+    <groupId>dev.langchain4j</groupId>
+    <artifactId>langchain4j-core</artifactId>
+    <version>1.17.0</version>
+</dependency>
+
+<dependency>
+    <groupId>dev.langchain4j</groupId>
+    <artifactId>langchain4j-open-ai</artifactId>
+    <version>1.17.0</version>
+</dependency>
+```
+
+这些依赖已经包含 `EmbeddingModel`、`OpenAiEmbeddingModel`、`TextSegment`、`EmbeddingSearchRequest`、`InMemoryEmbeddingStore`，可以完成 Markdown 向量化、检索和本地持久化。
+
+### 配置项
+
+配置位于 `backend/src/main/resources/application.yml`：
+
+```yaml
+langchain4j:
+  openai:
+    api-key: ${DASHSCOPE_API_KEY:----}
+    model-name: deepseek-v4-flash
+    base-url: https://api.deepseek.com/v1
+    embedding-model-name: ${EMBEDDING_MODEL_NAME:text-embedding-v4}
+    embedding-base-url: ${EMBEDDING_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+
+rag:
+  health:
+    vector-store-path: ${HEALTH_RAG_VECTOR_STORE_PATH:data/rag/health-knowledge-vector-store.json}
+```
+
+Windows PowerShell 示例：
+
+```powershell
+$env:DASHSCOPE_API_KEY="sk-your-api-key"
+$env:EMBEDDING_MODEL_NAME="text-embedding-v4"
+$env:EMBEDDING_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+```
+
+### 如何更新健康知识
+
+1. 编辑 `backend/src/main/resources/rag/health-knowledge.md`。
+2. 建议使用 `##` 二级标题拆分知识主题，例如血压、血糖、BMI、运动、饮食等。
+3. 重启后端或下一次触发智能健康分析时，系统会检查 Markdown 内容 hash。
+4. 如果 Markdown 有变化，会自动重新生成向量库文件。
+
+生成文件：
+
+```text
+data/rag/health-knowledge-vector-store.json
+data/rag/health-knowledge-vector-store.json.meta
+```
+
+### 常见问题
+
+**为什么没有加 `langchain4j-easy-rag`？**
+
+当前项目使用 `dev.langchain4j:langchain4j:1.17.0`，该版本下没有可用的 `langchain4j-easy-rag` artifact。项目直接使用 LangChain4j 原生 Embedding 和 EmbeddingStore API 实现 RAG。
+
+**启动时报 `No default constructor found` 怎么办？**
+
+确认 `HealthKnowledgeRagServiceImpl` 的正式构造器带有 `@Autowired`，然后重新编译：
+
+```powershell
+cd backend
+mvn clean compile
+```
+
+**什么时候会调用外部 embedding 接口？**
+
+应用启动时不会立即生成向量。首次调用智能健康分析并触发 RAG 检索时，如果本地向量库不存在或 Markdown 内容已变化，才会调用 embedding 模型生成向量。
+
 ---
 
 ⭐ 如果这个项目对你有帮助，请给个 Star 支持一下！

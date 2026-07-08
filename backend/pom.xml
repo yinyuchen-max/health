@@ -97,7 +97,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- LangChain4j -->
+        <!-- LangChain4j core: chat, RAG APIs, embedding store, in-memory vector store -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j</artifactId>
@@ -110,6 +110,7 @@
             <version>1.17.0</version>
         </dependency>
 
+        <!-- OpenAI-compatible chat and embedding models -->
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-open-ai</artifactId>

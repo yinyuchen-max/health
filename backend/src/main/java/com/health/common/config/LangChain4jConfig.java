@@ -1,7 +1,9 @@
 package com.health.common.config;
 
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +36,12 @@ public class LangChain4jConfig {
     @Value("${langchain4j.openai.timeout:60}")
     private Integer timeout;
 
+    @Value("${langchain4j.openai.embedding-model-name:text-embedding-3-small}")
+    private String embeddingModelName;
+
+    @Value("${langchain4j.openai.embedding-base-url:${langchain4j.openai.base-url:https://api.openai.com/v1}}")
+    private String embeddingBaseUrl;
+
     @Bean
     public ChatModel chatModel() {
         log.info("初始化 LangChain4j ChatModel: model={}, baseUrl={}", modelName, baseUrl);
@@ -42,6 +50,19 @@ public class LangChain4jConfig {
                 .modelName(modelName)
                 .baseUrl(baseUrl)
                 .temperature(temperature)
+                .timeout(Duration.ofSeconds(timeout))
+                .logRequests(true)
+                .logResponses(true)
+                .build();
+    }
+
+    @Bean
+    public EmbeddingModel embeddingModel() {
+        log.info("初始化 LangChain4j EmbeddingModel: model={}, baseUrl={}", embeddingModelName, embeddingBaseUrl);
+        return OpenAiEmbeddingModel.builder()
+                .apiKey(apiKey)
+                .modelName(embeddingModelName)
+                .baseUrl(embeddingBaseUrl)
                 .timeout(Duration.ofSeconds(timeout))
                 .logRequests(true)
                 .logResponses(true)
