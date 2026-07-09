@@ -17,9 +17,8 @@ spring:
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
 
-
   mvc:
-   pathmatch:
+    pathmatch:
       matching-strategy: ant_path_matcher
 
   jackson:
@@ -42,32 +41,29 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-# JWT配置
 jwt:
   secret: healthsystemsecretkey-healthsystemsecretkey-2026
   expiration: 86400000
 
-# LangChain4j AI 配置
 langchain4j:
   openai:
     api-key: ${DASHSCOPE_API_KEY:----}
     model-name: deepseek-v4-flash
     base-url: https://api.deepseek.com/v1
+    embedding-model-name: ${EMBEDDING_MODEL_NAME:text-embedding-v4}
+    embedding-base-url: ${EMBEDDING_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
     temperature: 0.3
     timeout: 60
-  # 国内模型也支持，可切换为:
-  # openai:
-  #   api-key: ${DASHSCOPE_API_KEY:sk-your-key}
-  #   model-name: qwen-plus
-  #   base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
   fallback:
-    enabled: true  # AI 不可用时自动回退到规则引擎
+    enabled: true
     ai-timeout-ms: 3000
 
-# 日志配置
+rag:
+  health:
+    vector-store-path: ${HEALTH_RAG_VECTOR_STORE_PATH:data/rag/health-knowledge-vector-store.json}
+
 logging:
   level:
     com.health: DEBUG
     org.springframework.security: DEBUG
     dev.langchain4j: INFO
-
