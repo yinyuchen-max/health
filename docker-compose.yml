@@ -8,7 +8,7 @@ services:
       MYSQL_DATABASE: health_system
       TZ: Asia/Shanghai
     ports:
-      - "3306:3306"
+      - "3308:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./backend/database/health_system.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
@@ -17,9 +17,9 @@ services:
       - --collation-server=utf8mb4_unicode_ci
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p123456"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      interval: 2s
+      timeout: 2s
+      retries: 30
 
   backend:
     build:
@@ -33,6 +33,10 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/health_system?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: 123456
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required}"
+      DASHSCOPE_API_KEY: "${DASHSCOPE_API_KEY:?DASHSCOPE_API_KEY is required}"
+      EMBEDDING_MODEL_NAME: "${EMBEDDING_MODEL_NAME:-text-embedding-v4}"
+      EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
       TZ: Asia/Shanghai
     ports:
       - "8080:8080"

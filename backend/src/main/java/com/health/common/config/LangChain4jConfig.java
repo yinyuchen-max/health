@@ -21,8 +21,11 @@ public class LangChain4jConfig {
 
     private static final Logger log = LoggerFactory.getLogger(LangChain4jConfig.class);
 
-    @Value("${langchain4j.openai.api-key}")
-    private String apiKey;
+    @Value("${langchain4j.openai.chat-api-key}")
+    private String chatApiKey;
+
+    @Value("${langchain4j.openai.embedding-api-key}")
+    private String embeddingApiKey;
 
     @Value("${langchain4j.openai.model-name:gpt-4o}")
     private String modelName;
@@ -46,7 +49,7 @@ public class LangChain4jConfig {
     public ChatModel chatModel() {
         log.info("初始化 LangChain4j ChatModel: model={}, baseUrl={}", modelName, baseUrl);
         return OpenAiChatModel.builder()
-                .apiKey(apiKey)
+                .apiKey(chatApiKey)
                 .modelName(modelName)
                 .baseUrl(baseUrl)
                 .temperature(temperature)
@@ -60,7 +63,7 @@ public class LangChain4jConfig {
     public EmbeddingModel embeddingModel() {
         log.info("初始化 LangChain4j EmbeddingModel: model={}, baseUrl={}", embeddingModelName, embeddingBaseUrl);
         return OpenAiEmbeddingModel.builder()
-                .apiKey(apiKey)
+                .apiKey(embeddingApiKey)
                 .modelName(embeddingModelName)
                 .baseUrl(embeddingBaseUrl)
                 .timeout(Duration.ofSeconds(timeout))
