@@ -5,7 +5,7 @@
         <div>
           <p class="hero-kicker">AI Health Assistant</p>
           <h2>AI 健康顾问</h2>
-          <p>向 AI 咨询健康、饮食、运动、睡眠等问题，获取专业建议（仅供参考，不替代医生诊断）</p>
+          <p>向 AI 咨询健康、饮食、运动、睡眠等问题，获取专业建议（仅供参考，可以输入“预约”来进行预约医生服务）</p>
         </div>
         <el-button 
           v-if="messages.length > 0"

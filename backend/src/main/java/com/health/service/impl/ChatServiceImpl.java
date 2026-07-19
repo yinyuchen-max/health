@@ -4,6 +4,7 @@ import com.health.domain.dto.ChatResponseDTO;
 import com.health.domain.vo.HealthRecordVO;
 import com.health.domain.vo.SportRecordVO;
 import com.health.service.ChatService;
+import com.health.service.AppointmentConversationService;
 import com.health.service.HealthRecordService;
 import com.health.service.SportRecordService;
 import dev.langchain4j.data.message.AiMessage;
@@ -39,13 +40,18 @@ public class ChatServiceImpl implements ChatService {
             """;
 
     private final ChatModel chatModel;
+    private final AppointmentConversationService appointmentConversationService;
     private final HealthRecordService healthRecordService;
     private final SportRecordService sportRecordService;
     // 使用 ConcurrentHashMap 缓存每个用户的对话记忆，确保线程安全
     private final ConcurrentHashMap<Object, MessageWindowChatMemory> userMemories = new ConcurrentHashMap<>();
 
-    public ChatServiceImpl(ChatModel chatModel, HealthRecordService healthRecordService, SportRecordService sportRecordService) {
+    public ChatServiceImpl(ChatModel chatModel,
+                           AppointmentConversationService appointmentConversationService,
+                           HealthRecordService healthRecordService,
+                           SportRecordService sportRecordService) {
         this.chatModel = chatModel;
+        this.appointmentConversationService = appointmentConversationService;
         this.healthRecordService = healthRecordService;
         this.sportRecordService = sportRecordService;
     }
@@ -54,7 +60,15 @@ public class ChatServiceImpl implements ChatService {
     public ChatResponseDTO chat(String userMessage, Long userId) {
         if (userMessage == null || userMessage.isBlank()) {
             ChatResponseDTO dto = new ChatResponseDTO();
-            dto.setReply("请告诉我您想咨询的健康问题，我会尽力为您解答。");
+            dto.setReply(appointmentConversationService.appendAppointmentOffer(
+                    "请告诉我您想咨询的健康问题，我会尽力为您解答。", userId));
+            return dto;
+        }
+
+        String appointmentReply = appointmentConversationService.handleMessage(userMessage, userId);
+        if (appointmentReply != null) {
+            ChatResponseDTO dto = new ChatResponseDTO();
+            dto.setReply(appointmentReply);
             return dto;
         }
 
@@ -98,12 +112,13 @@ public class ChatServiceImpl implements ChatService {
             log.info("保存后记忆中的消息数: {}", chatMemory.messages().size());
 
             ChatResponseDTO dto = new ChatResponseDTO();
-            dto.setReply(aiReply != null ? aiReply : "抱歉，暂时无法生成回复，请稍后重试。");
+            dto.setReply(appointmentConversationService.appendAppointmentOffer(aiReply, userId));
             return dto;
         } catch (Exception e) {
             log.error("AI 对话失败: {}", e.getMessage(), e);
             ChatResponseDTO dto = new ChatResponseDTO();
-            dto.setReply("抱歉，AI 服务暂时不可用，请稍后再试。您也可以查看「智能健康」页面获取系统评估。");
+            dto.setReply(appointmentConversationService.appendAppointmentOffer(
+                    "抱歉，AI 服务暂时不可用，请稍后再试。您也可以查看「智能健康」页面获取系统评估。", userId));
             return dto;
         }
     }

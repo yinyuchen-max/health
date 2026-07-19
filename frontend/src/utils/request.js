@@ -2,13 +2,8 @@ import axios from 'axios'
 import { useUserStore } from '../store/user'
 
 const isLikelyJwt = (value) => typeof value === 'string' && value.trim().split('.').length === 3
-const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL
-const shouldUseViteProxy = typeof window !== 'undefined'
-  && configuredBaseUrl === '/api'
-  && window.location.port === '3000'
-const resolvedBaseUrl = shouldUseViteProxy
-  ? '/api'
-  : (configuredBaseUrl === '/api' ? 'http://localhost:8080/api' : (configuredBaseUrl || 'http://localhost:8080'))
+const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+const resolvedBaseUrl = configuredBaseUrl || '/api'
 
 // Create reusable request instance
 const request = axios.create({

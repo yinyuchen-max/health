@@ -1,6 +1,6 @@
 # 健康管理系统 
 
-基于 SpringBoot + Vue 3 + MySQL 的智能健康管理平台，集成 AI 健康顾问功能。
+基于 Spring Boot + Vue 3 + MySQL 的智能健康管理平台，集成 AI 健康顾问、健康知识 RAG 和自然语言医生预约功能。
 
 ## ✨ 主要特性
 
@@ -9,6 +9,8 @@
 - 🏃‍♂️ **运动记录**: 运动类型、时长、消耗热量统计
 - 💡 **智能分析**: 自动计算 BMI、风险评估、营养建议
 - 🤖 **AI 健康顾问**: 基于 DeepSeek/Qwen 大模型的个性化健康咨询
+- 🏥 **AI 医生预约**: 自然语言提取预约信息，多轮补充，确认后写入数据库
+- 📚 **健康知识 RAG**: 基于本地 Markdown 知识库进行向量检索与增强回答
 - 💾 **会话隔离**: 每个用户的 AI 对话独立存储，支持上下文记忆
 - 🎨 **现代化 UI**: Element Plus + 响应式设计
 
@@ -75,6 +77,16 @@
 - ✅ 运动提醒
 - ✅ 自定义提醒时间
 
+### 7. AI 医生预约 🏥
+- ✅ AI 从自然语言中结构化提取姓名、年龄、预约时间、电话和科室
+- ✅ 字段顺序任意，支持“泌尿科”等科室别名归一化
+- ✅ 缺少或无法识别字段时给出明确提示
+- ✅ 支持多轮补充和修改预约信息
+- ✅ 展示完整预约信息并要求用户确认
+- ✅ 只有用户回复“确认预约”后才写入 MySQL
+- ✅ 支持取消预约填写
+- ✅ 应用启动时自动检查并创建 `doctor_appointment` 表
+
 ## 🚀 快速开始
 
 ### 前置要求
@@ -86,25 +98,33 @@
 
 ### 1. 数据库准备
 
-```bash
-# 创建数据库
-CREATE DATABASE health_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+首次安装，执行完整数据库脚本：
 
-# 导入 SQL 脚本
-mysql -u root -p health_system < database/health-system.sql
+```bash
+mysql -u root -p < backend/database/health_system.sql
 ```
+
+已有数据库只需要增加医生预约表：
+
+```bash
+mysql -u root -p < backend/database/add_doctor_appointment.sql
+```
+
+`DoctorAppointmentServiceImpl` 在应用启动时也会执行 `CREATE TABLE IF NOT EXISTS`，但生产环境仍建议通过 SQL 脚本管理数据库结构。
 
 ### 2. 后端启动
 
 ```bash
 cd backend
 
-# 配置环境变量（必需）
+# 配置环境变量（AI 对话与预约信息提取必需）
 # Windows PowerShell
-$env:DASHSCOPE_API_KEY="sk-your-api-key-here"
+$env:DEEPSEEK_API_KEY="sk-your-deepseek-key"
+$env:DASHSCOPE_API_KEY="sk-your-dashscope-key"
 
 # Linux/Mac
-export DASHSCOPE_API_KEY="sk-your-api-key-here"
+export DEEPSEEK_API_KEY="sk-your-deepseek-key"
+export DASHSCOPE_API_KEY="sk-your-dashscope-key"
 
 # 或者创建 application-local.yml（见下方配置说明）
 
@@ -133,7 +153,7 @@ npm run dev
 npm run build
 ```
 
-前端应用将运行在 `http://localhost:5173`
+前端应用将运行在 `http://localhost:3000`
 
 ## ⚙️ 环境配置
 
@@ -146,21 +166,28 @@ npm run build
 在项目根目录创建 `.env` 文件（已加入 `.gitignore`）：
 
 ```env
-# AI API Key（必需）
-DASHSCOPE_API_KEY=sk-your-actual-api-key-here
+# DeepSeek 聊天模型 Key（AI 对话和预约信息提取必需）
+DEEPSEEK_API_KEY=sk-your-deepseek-key
 
-# 可选：AI 模型配置
-AI_MODEL_NAME=deepseek-v4-flash
-AI_BASE_URL=https://api.deepseek.com/v1
-AI_TEMPERATURE=0.3
-AI_TIMEOUT=60
+# DashScope Embedding Key（健康知识 RAG 必需）
+DASHSCOPE_API_KEY=sk-your-dashscope-key
 
-# 可选：数据库密码覆盖
-DB_PASSWORD=your-database-password
+# 可选：覆盖 AI 模型配置
+LANGCHAIN4J_OPENAI_MODEL_NAME=deepseek-v4-flash
+LANGCHAIN4J_OPENAI_BASE_URL=https://api.deepseek.com/v1
+LANGCHAIN4J_OPENAI_TEMPERATURE=0.3
+LANGCHAIN4J_OPENAI_TIMEOUT=60
+
+# 可选：Spring 数据源覆盖
+SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/health_system?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+SPRING_DATASOURCE_USERNAME=root
+SPRING_DATASOURCE_PASSWORD=your-database-password
 
 # 可选：JWT Secret（至少 256 位）
 JWT_SECRET=your-jwt-secret-key-min-256-bits-long
 ```
+
+Docker Compose 会自动读取项目根目录的 `.env`。如果通过 `mvn spring-boot:run` 或 IDE 直接启动后端，需要将这些变量导出到当前终端，或配置到 IDE 的 Environment variables 中。
 
 #### 方法二：本地配置文件
 
@@ -169,10 +196,13 @@ JWT_SECRET=your-jwt-secret-key-min-256-bits-long
 ```yaml
 langchain4j:
   openai:
-    api-key: sk-your-actual-api-key-here  # 替换为你的真实 API Key
+    chat-api-key: sk-your-deepseek-key
+    embedding-api-key: sk-your-dashscope-key
 
 spring:
   datasource:
+    url: jdbc:mysql://localhost:3306/health_system?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
     password: your-database-password  # 如果需要覆盖默认密码
 
 jwt:
@@ -192,7 +222,7 @@ jwt:
 ```yaml
 langchain4j:
   openai:
-    api-key: ${DASHSCOPE_API_KEY}
+    chat-api-key: ${DEEPSEEK_API_KEY:}
     model-name: deepseek-v4-flash
     base-url: https://api.deepseek.com/v1
 ```
@@ -201,7 +231,7 @@ langchain4j:
 ```yaml
 langchain4j:
   openai:
-    api-key: ${DASHSCOPE_API_KEY}
+    chat-api-key: ${DASHSCOPE_API_KEY:}
     model-name: qwen-plus
     base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
 ```
@@ -237,13 +267,20 @@ health/
 │   │   ├── service/                  # 业务逻辑层
 │   │   │   ├── impl/                 # 服务实现
 │   │   │   │   ├── ChatServiceImpl.java      # AI 对话服务
+│   │   │   │   ├── AiAppointmentInformationExtractor.java # AI 预约字段提取
+│   │   │   │   ├── AppointmentConversationServiceImpl.java # 预约会话与确认
+│   │   │   │   ├── DoctorAppointmentServiceImpl.java # 预约落库与自动建表
 │   │   │   │   ├── SmartHealthServiceImpl.java # 智能分析服务
 │   │   │   │   └── ...
 │   │   │   └── ...
 │   │   └── HealthSystemBackendApplication.java
 │   ├── src/main/resources/
 │   │   ├── application.yml           # 主配置文件
+│   │   ├── rag/health-knowledge.md    # 本地健康知识库
 │   │   └── static/                   # 静态资源（前端打包后）
+│   ├── database/
+│   │   ├── health_system.sql          # 完整建库与初始数据
+│   │   └── add_doctor_appointment.sql # 已有数据库的预约表增量脚本
 │   ├── pom.xml                       # Maven 依赖
 │   └── Dockerfile                    # Docker 构建文件
 │
@@ -280,9 +317,6 @@ health/
 │   ├── package.json                  # npm 依赖
 │   └── Dockerfile                    # Docker 构建文件
 │
-├── database/                         # 数据库脚本
-│   └── health-system.sql             # 建表与初始数据
-│
 ├── docker-compose.yml                # Docker Compose 编排
 ├── .gitignore                        # Git 忽略文件
 └── README.md                         # 项目文档
@@ -291,27 +325,25 @@ health/
 ## 🔑 核心 API 接口
 
 ### 认证相关
-- `POST /api/auth/register` - 用户注册
-- `POST /api/auth/login` - 用户登录
-- `GET /api/auth/info` - 获取当前用户信息
+- `POST /api/user/register` - 用户注册
+- `POST /api/user/login` - 用户登录
+- `GET /api/user/info` - 获取当前用户信息
+- `PUT /api/user/info` - 更新当前用户信息
 
 ### 健康记录
-- `POST /api/health/records` - 添加健康记录
+- `POST /api/health/record` - 添加健康记录
 - `GET /api/health/records/{userId}` - 查询健康记录列表
-- `DELETE /api/health/records/{id}` - 删除健康记录
-- `PUT /api/health/records/{id}` - 更新健康记录
+- `DELETE /api/health/record/{id}` - 删除健康记录
+- `PUT /api/health/record/{id}` - 更新健康记录
 
 ### 运动记录
-- `POST /api/sport/records` - 添加运动记录
+- `POST /api/sport/record` - 添加运动记录
 - `GET /api/sport/records/{userId}` - 查询运动记录列表
-- `DELETE /api/sport/records/{id}` - 删除运动记录
-- `PUT /api/sport/records/{id}` - 更新运动记录
+- `DELETE /api/sport/record/{id}` - 删除运动记录
+- `PUT /api/sport/record/{id}` - 更新运动记录
 
 ### 智能分析
-- `GET /api/smart-health/overview/{userId}` - 获取健康概览
-- `GET /api/smart-health/risk-assessment/{userId}` - 风险评估
-- `GET /api/smart-health/nutrition-advice/{userId}` - 营养建议
-- `GET /api/smart-health/exercise-plan/{userId}` - 运动计划
+- `GET /api/smart-health/overview?userId={userId}` - 获取智能健康概览
 
 ### AI 对话
 - `POST /api/chat/send` - 发送 AI 对话请求
@@ -321,6 +353,52 @@ health/
     "userId": 1
   }
   ```
+
+医生预约也复用该接口，不额外开放直接写数据库的预约接口。
+
+## 🏥 AI 预约流程
+
+预约信息由 AI 提取为结构化 JSON，Java 后端负责字段校验、科室标准化、未来时间校验和数据库保存。
+
+必填字段：
+
+- 姓名
+- 年龄（1～120）
+- 预约时间（必须晚于当前时间）
+- 用户电话
+- 预约科室
+
+示例对话：
+
+```text
+用户：我叫利口，56岁，想在2026年7月30日上午9点半预约泌尿科，电话17865387668。
+
+系统：
+请确认预约信息：
+姓名：利口
+年龄：56岁
+预约科室：泌尿外科
+预约时间：2026-07-30 09:30
+联系电话：17865387668
+
+信息正确请回复“确认预约”，需要修改请直接说明，取消请回复“取消预约”。
+
+用户：确认预约
+
+系统：预约成功！
+```
+
+预约流程说明：
+
+1. 普通健康回答结尾会询问用户是否需要预约医生。
+2. AI 将自然语言转换为 `AppointmentExtractionResult`。
+3. Java 后端不会信任模型结果，会再次校验所有字段。
+4. 信息不完整时进入多轮补充，不会写入数据库。
+5. 信息完整后展示确认摘要，仍不会写入数据库。
+6. 只有用户明确回复“确认预约”后，才写入 `doctor_appointment` 表。
+7. 用户回复“取消预约”会清除当前内存预约草稿。
+
+当前预约草稿保存在后端内存中，后端重启后，尚未确认的草稿会丢失。若部署多实例，建议后续将草稿迁移到 Redis。
 
 ## 🧪 测试
 
@@ -333,41 +411,51 @@ mvn test
 ### 前端测试
 ```bash
 cd frontend
-npm run test
+npm run lint
+npm run build
 ```
 
-##  Docker 部署
+## 🐳 Docker 部署
 
 ```bash
 # 使用 Docker Compose 一键启动
-docker-compose up -d
+docker compose up -d
 
 # 查看日志
-docker-compose logs -f
+docker compose logs -f
 
 # 停止服务
-docker-compose down
+docker compose down
 ```
 
 ## 📝 注意事项
 
 1. **首次使用前请修改默认密码**
-   - 管理员账号: `admin / admin123`
-   - 普通用户: `user1 / user123`
+   - 完整 SQL 示例管理员账号: `admin / 123456`
+   - 完整 SQL 示例普通账号: `user1 / 456`
+   - 这些账号仅用于本地演示，部署前应修改密码并使用安全的密码编码方式
 
 2. **AI 功能需要配置 API Key**
-   - 未配置 API Key 时，AI 对话功能将无法使用
-   - 系统会自动回退到规则引擎提供基础建议
+   - `DEEPSEEK_API_KEY` 用于健康对话和预约字段提取
+   - `DASHSCOPE_API_KEY` 用于健康知识 Embedding
+   - 预约字段提取失败时，系统会提示用户使用明确格式重新填写
 
 3. **数据库连接**
    - 默认数据库: `health_system`
    - 默认用户名: `root`
-   - 默认密码: `123456`（请在生产环境中修改）
+   - 请通过 `SPRING_DATASOURCE_PASSWORD` 或本地配置文件设置实际密码
 
 4. **端口占用**
    - 后端: 8080
-   - 前端: 5173
-   - MySQL: 3306
+   - 前端开发服务器: 3000
+   - 本地 MySQL: 3306
+   - Docker MySQL 宿主机端口: 3308
+   - Docker 前端: 80
+
+5. **Spring Controller 参数名错误**
+   - 项目已在 Maven 编译器中启用 `<parameters>true</parameters>`
+   - 请使用 `mvn clean package` 或 IDE 的 Maven 构建重新编译
+   - 不要使用缺少 `-parameters` 的裸 `javac` 覆盖 `target/classes`
 
 ## 🤝 贡献指南
 
@@ -446,7 +534,8 @@ backend/src/main/resources/rag/health-knowledge.md
 ```yaml
 langchain4j:
   openai:
-    api-key: ${DASHSCOPE_API_KEY:----}
+    chat-api-key: ${DEEPSEEK_API_KEY:}
+    embedding-api-key: ${DASHSCOPE_API_KEY:}
     model-name: deepseek-v4-flash
     base-url: https://api.deepseek.com/v1
     embedding-model-name: ${EMBEDDING_MODEL_NAME:text-embedding-v4}
@@ -460,7 +549,8 @@ rag:
 Windows PowerShell 示例：
 
 ```powershell
-$env:DASHSCOPE_API_KEY="sk-your-api-key"
+$env:DEEPSEEK_API_KEY="sk-your-deepseek-key"
+$env:DASHSCOPE_API_KEY="sk-your-dashscope-key"
 $env:EMBEDDING_MODEL_NAME="text-embedding-v4"
 $env:EMBEDDING_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
 ```
