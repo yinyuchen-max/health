@@ -11,6 +11,8 @@ import com.health.service.ReminderService;
 import com.health.service.SmartHealthService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -29,6 +31,7 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
     }
 
     @Override
+    @Cacheable(value = "reminder:pref", key = "#userId")
     public List<ReminderPreferenceVO> getPreferencesByUserId(Long userId) {
         QueryWrapper<ReminderPreference> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("user_id", userId)
@@ -41,6 +44,7 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
     }
 
     @Override
+    @CacheEvict(value = "reminder:pref", allEntries = true)
     public boolean savePreference(ReminderPreferenceDTO dto) {
         try {
             ReminderPreference preference = convertToEntity(dto);
@@ -60,6 +64,7 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
     }
 
     @Override
+    @CacheEvict(value = "reminder:pref", allEntries = true)
     public boolean deletePreference(Long id) {
         try {
             ReminderPreference preference = getById(id);
@@ -76,6 +81,7 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
     }
 
     @Override
+    @CacheEvict(value = "reminder:pref", allEntries = true)
     public boolean toggleReminder(Long id, Boolean enabled) {
         try {
             ReminderPreference preference = getById(id);
@@ -142,6 +148,12 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
     @Override
     public boolean importPreferences(Long userId, String jsonData) {
         return false;
+    }
+
+    @Override
+    public Long getOwnerUserId(Long preferenceId) {
+        ReminderPreference preference = getById(preferenceId);
+        return preference != null ? preference.getUserId() : null;
     }
 
     private ReminderPreferenceVO convertToVO(ReminderPreference entity) {

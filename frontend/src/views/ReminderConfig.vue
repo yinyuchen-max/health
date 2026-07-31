@@ -131,6 +131,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useReminderStore } from '../store/reminder'
+import { useUserStore } from '../store/user'
 import {
   Bell,
   QuestionFilled,
@@ -141,6 +142,7 @@ import {
 
 const formRef = ref()
 const reminderStore = useReminderStore()
+const userStore = useUserStore()
 
 const form = reactive({
   type: '',
@@ -285,11 +287,16 @@ const saveConfig = async () => {
       try {
         const preferenceData = {
           ...form,
-          id: Date.now(), // 临时ID，实际应该从后端获取
-          userId: reminderStore.userInfo?.id || 1,
-          enabled: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          userId: userStore.userInfo?.id || 1,
+          enabled: true
+        }
+
+        // 如果当前表单对应一个已存在的偏好，才传 id（更新操作）
+        const existing = reminderStore.preferences.find(
+          p => p.type === form.type
+        )
+        if (existing) {
+          preferenceData.id = existing.id
         }
 
         const success = await reminderStore.savePreference(preferenceData)

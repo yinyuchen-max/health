@@ -258,6 +258,7 @@ CREATE TABLE `sys_user` (
   `height` decimal(5,2) DEFAULT NULL COMMENT 'cm',
   `weight` decimal(5,2) DEFAULT NULL COMMENT 'kg',
   `avatar` varchar(255) DEFAULT NULL,
+  `role` varchar(20) DEFAULT 'user' COMMENT 'admin-管理员, user-普通用户',
   `status` tinyint DEFAULT '1' COMMENT '0-禁用, 1-启用',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -275,7 +276,7 @@ CREATE TABLE `sys_user` (
 
 LOCK TABLES `sys_user` WRITE;
 /*!40000 ALTER TABLE `sys_user` DISABLE KEYS */;
-INSERT INTO `sys_user` VALUES (1,'admin','123456','admin@health.com','138000000001',1,23,175.00,70.00,NULL,1,'2026-03-18 15:39:05','2026-04-15 10:27:52',0),(2,'user1','456','user1@health.com','13800000001',1,28,180.00,75.00,NULL,1,'2026-03-18 15:39:05','2026-04-15 15:30:14',0),(3,'yyc','123','ycy66165@gmail.com','16783743726',1,43,185.00,70.00,NULL,1,'2026-04-15 15:29:10','2026-04-24 14:07:10',0),(7,'1321','111','18663566210@163.com','1',1,4,58.00,20.00,NULL,0,'2026-04-21 14:12:54','2026-04-24 17:50:49',0);
+INSERT INTO `sys_user` VALUES (1,'admin','123456','admin@health.com','138000000001',1,23,175.00,70.00,NULL,'admin',1,'2026-03-18 15:39:05','2026-04-15 10:27:52',0),(2,'user1','456','user1@health.com','13800000001',1,28,180.00,75.00,NULL,'user',1,'2026-03-18 15:39:05','2026-04-15 15:30:14',0),(3,'yyc','123','ycy66165@gmail.com','16783743726',1,43,185.00,70.00,NULL,'user',1,'2026-04-15 15:29:10','2026-04-24 14:07:10',0),(7,'1321','111','18663566210@163.com','1',1,4,58.00,20.00,NULL,'user',0,'2026-04-21 14:12:54','2026-04-24 17:50:49',0);
 /*!40000 ALTER TABLE `sys_user` ENABLE KEYS */;
 UNLOCK TABLES;
 

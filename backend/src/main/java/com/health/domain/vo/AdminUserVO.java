@@ -18,6 +18,7 @@ public class AdminUserVO {
     private Double height;
     private Double weight;
     private String avatar;
+    private String role;
     private Integer status;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

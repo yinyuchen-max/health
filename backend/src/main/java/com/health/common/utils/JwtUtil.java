@@ -22,11 +22,10 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private Long expiration;
 
-    public String generateToken(String username) {
+    public String generateToken(String username, String role) {
         Map<String, Object> claims = new HashMap<>();
-        // 根据用户名设置角色
-        String role = "admin".equals(username) ? "admin" : "user";
-        claims.put("role", role);
+        // 从数据库读取的角色，默认 user
+        claims.put("role", role != null ? role : "user");
         return createToken(claims, username);
     }
 
@@ -91,6 +90,15 @@ public class JwtUtil {
      */
     public String extractRole(String token) {
         return getClaimFromToken(token, claims -> claims.get("role", String.class));
+    }
+
+    /**
+     * 获取 token 签发时间
+     * @param token JWT token
+     * @return 签发时间
+     */
+    public Date getIssuedAt(String token) {
+        return getClaimFromToken(token, Claims::getIssuedAt);
     }
 
     /**

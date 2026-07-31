@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class ChatServiceImpl implements ChatService {
@@ -43,17 +42,18 @@ public class ChatServiceImpl implements ChatService {
     private final AppointmentConversationService appointmentConversationService;
     private final HealthRecordService healthRecordService;
     private final SportRecordService sportRecordService;
-    // 使用 ConcurrentHashMap 缓存每个用户的对话记忆，确保线程安全
-    private final ConcurrentHashMap<Object, MessageWindowChatMemory> userMemories = new ConcurrentHashMap<>();
+    private final RedisChatMemoryStore redisChatMemoryStore;
 
     public ChatServiceImpl(ChatModel chatModel,
                            AppointmentConversationService appointmentConversationService,
                            HealthRecordService healthRecordService,
-                           SportRecordService sportRecordService) {
+                           SportRecordService sportRecordService,
+                           RedisChatMemoryStore redisChatMemoryStore) {
         this.chatModel = chatModel;
         this.appointmentConversationService = appointmentConversationService;
         this.healthRecordService = healthRecordService;
         this.sportRecordService = sportRecordService;
+        this.redisChatMemoryStore = redisChatMemoryStore;
     }
 
     @Override
@@ -73,16 +73,16 @@ public class ChatServiceImpl implements ChatService {
         }
 
         try {
-            // 获取当前用户的对话记忆（如果不存在则创建）
+            // 获取当前用户的对话记忆（使用 Redis 存储）
             Object memoryId = userId != null ? userId : "default";
             log.info("AI 对话请求 - userId: {}, memoryId: {}", userId, memoryId);
             
-            var chatMemory = userMemories.computeIfAbsent(memoryId, id -> 
-                MessageWindowChatMemory.builder()
-                    .id(id)
+            // 使用 Redis 存储的聊天记忆
+            var chatMemory = MessageWindowChatMemory.builder()
+                    .chatMemoryStore(redisChatMemoryStore)
+                    .id(memoryId)
                     .maxMessages(20)
-                    .build()
-            );
+                    .build();
             
             log.info("当前用户历史消息数: {}", chatMemory.messages().size());
             

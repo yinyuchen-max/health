@@ -12,6 +12,8 @@ import com.health.mapper.UserMapper;
 import com.health.service.UserService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -32,7 +34,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("username", userLoginDTO.getUsername());
         User user = getOne(queryWrapper);
-        if (user == null || !userLoginDTO.getPassword().equals(user.getPassword())) {
+        if (user == null || !passwordEncoder.matches(userLoginDTO.getPassword(), user.getPassword())) {
             throw new RuntimeException("用户名或密码错误");
         }
 
@@ -40,7 +42,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new RuntimeException("账号已被禁用");
         }
 
-        return jwtUtil.generateToken(user.getUsername());
+        return jwtUtil.generateToken(user.getUsername(), user.getRole());
     }
 
     @Override
@@ -52,7 +54,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         User user = new User();
         BeanUtils.copyProperties(userRegisterDTO, user);
-        user.setPassword(userRegisterDTO.getPassword());
+        // 密码加密存储
+        user.setPassword(passwordEncoder.encode(userRegisterDTO.getPassword()));
+        user.setRole("user");
         user.setStatus(1);
         user.setCreateTime(java.time.LocalDateTime.now());
         user.setUpdateTime(java.time.LocalDateTime.now());
@@ -61,6 +65,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @Cacheable(value = "user:info", key = "'id:' + #userId")
     public UserVO getUserInfo(Long userId) {
         User user = getById(userId);
         if (user == null) {
@@ -73,6 +78,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @Cacheable(value = "user:info", key = "'username:' + #username")
     public UserVO getUserInfoByUsername(String username) {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("username", username);
@@ -87,6 +93,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @CacheEvict(value = "user:info", allEntries = true)
     public void updateUserInfo(UserVO userVO) {
         User user = getById(userVO.getId());
         if (user == null) {
@@ -115,6 +122,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @CacheEvict(value = "user:info", allEntries = true)
     public void updateUserStatus(Long userId, Integer status) {
         User user = getById(userId);
         if (user == null) {

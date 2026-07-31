@@ -7,28 +7,17 @@ import com.health.service.HealthKnowledgeRagService;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
-import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HexFormat;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
+import java.util.*;
 
 @Service
 public class HealthKnowledgeRagServiceImpl implements HealthKnowledgeRagService {
@@ -40,23 +29,17 @@ public class HealthKnowledgeRagServiceImpl implements HealthKnowledgeRagService 
     private final String markdown;
     private final List<String> chunks;
     private final EmbeddingModel embeddingModel;
-    private final Path vectorStorePath;
-
-    private volatile InMemoryEmbeddingStore<TextSegment> embeddingStore;
+    private final HealthKnowledgeRedisRepository redisRepository;
 
     @Autowired
     public HealthKnowledgeRagServiceImpl(
             EmbeddingModel embeddingModel,
-            @Value("${rag.health.vector-store-path:data/rag/health-knowledge-vector-store.json}") String vectorStorePath
+            HealthKnowledgeRedisRepository redisRepository
     ) {
-        this(loadKnowledgeDocument(), embeddingModel, Path.of(vectorStorePath));
-    }
-
-    HealthKnowledgeRagServiceImpl(String markdown, EmbeddingModel embeddingModel, Path vectorStorePath) {
-        this.markdown = markdown == null ? "" : markdown;
+        this.markdown = loadKnowledgeDocument();
         this.chunks = splitMarkdown(this.markdown);
         this.embeddingModel = embeddingModel;
-        this.vectorStorePath = vectorStorePath;
+        this.redisRepository = redisRepository;
     }
 
     @Override
@@ -72,80 +55,41 @@ public class HealthKnowledgeRagServiceImpl implements HealthKnowledgeRagService 
             return List.of();
         }
 
+        // 尝试使用 Redis 向量检索
         try {
-            InMemoryEmbeddingStore<TextSegment> store = initializeVectorStore();
-            Embedding queryEmbedding = embeddingModel.embed(query).content();
-            EmbeddingSearchRequest request = EmbeddingSearchRequest.builder()
-                    .queryEmbedding(queryEmbedding)
-                    .maxResults(MAX_SNIPPETS)
-                    .minScore(MIN_SCORE)
-                    .build();
-
-            List<String> results = store.search(request).matches().stream()
-                    .map(match -> match.embedded().text())
-                    .toList();
+            List<String> results = vectorRetrieve(query);
             if (!results.isEmpty()) {
                 return results;
             }
         } catch (Exception e) {
-            log.warn("Vector RAG retrieval failed, falling back to keyword retrieval: {}", e.getMessage());
+            log.warn("向量 RAG 检索失败，回退到关键词检索: {}", e.getMessage());
         }
 
+        // 回退到关键词检索
         return keywordRetrieve(user, healthRecords, sportRecords, bmi, weeklyExerciseMinutes);
     }
 
-    private synchronized InMemoryEmbeddingStore<TextSegment> initializeVectorStore() {
-        if (embeddingStore != null) {
-            return embeddingStore;
-        }
-
+    /**
+     * 使用 Redis 向量存储进行检索
+     */
+    private List<String> vectorRetrieve(String query) {
         String currentHash = sha256(markdown);
-        Path metaPath = metaPath();
-        if (Files.exists(vectorStorePath) && Files.exists(metaPath)) {
-            try {
-                String storedHash = Files.readString(metaPath, StandardCharsets.UTF_8).trim();
-                if (storedHash.equals(currentHash)) {
-                    embeddingStore = InMemoryEmbeddingStore.fromFile(vectorStorePath);
-                    return embeddingStore;
-                }
-            } catch (Exception e) {
-                log.warn("Failed to load existing vector store, rebuilding: {}", e.getMessage());
-            }
-        }
 
-        InMemoryEmbeddingStore<TextSegment> store = new InMemoryEmbeddingStore<>();
-        if (!chunks.isEmpty()) {
+        // 检查是否需要重建索引
+        if (redisRepository.isSourceChanged(currentHash)) {
             List<TextSegment> segments = chunks.stream()
                     .map(TextSegment::from)
                     .toList();
-            List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
-            List<String> ids = new ArrayList<>();
-            for (int i = 0; i < segments.size(); i++) {
-                ids.add("health-knowledge-" + i);
-            }
-            store.addAll(ids, embeddings, segments);
+            redisRepository.buildAndActivate(segments, currentHash);
         }
 
-        persistVectorStore(store, currentHash);
-        embeddingStore = store;
-        return embeddingStore;
-    }
-
-    private void persistVectorStore(InMemoryEmbeddingStore<TextSegment> store, String hash) {
-        try {
-            Path parent = vectorStorePath.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            store.serializeToFile(vectorStorePath);
-            Files.writeString(metaPath(), hash, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.warn("Failed to persist health knowledge vector store: {}", e.getMessage());
+        // 执行向量搜索
+        if (!redisRepository.hasActiveStore()) {
+            return List.of();
         }
-    }
 
-    private Path metaPath() {
-        return vectorStorePath.resolveSibling(vectorStorePath.getFileName() + ".meta");
+        Embedding queryEmbedding = embeddingModel.embed(query).content();
+        return redisRepository.search(queryEmbedding, MAX_SNIPPETS, MIN_SCORE);
     }
 
     private static String loadKnowledgeDocument() {

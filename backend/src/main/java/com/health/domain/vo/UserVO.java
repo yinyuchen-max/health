@@ -15,6 +15,7 @@ public class UserVO {
     private Double height;
     private Double weight;
     private String avatar;
+    private String role;
     private Integer status;
     private LocalDateTime createTime;
 
@@ -105,5 +106,13 @@ public class UserVO {
 
     public void setCreateTime(LocalDateTime createTime) {
         this.createTime = createTime;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
     }
 }

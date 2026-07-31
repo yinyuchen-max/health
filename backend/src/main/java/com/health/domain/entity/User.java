@@ -22,6 +22,7 @@ public class User {
     private Double height; // cm
     private Double weight; // kg
     private String avatar;
+    private String role;       // admin, user
     private Integer status; // 0-禁用, 1-启用
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

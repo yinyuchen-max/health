@@ -422,7 +422,8 @@ const refreshData = async () => {
     // 并行获取数据
     const [overviewResponse, sportRecordsResponse] = await Promise.all([
       request.get('/smart-health/overview', {
-        params: { userId }
+        params: { userId },
+        timeout: 90000  // AI 分析需要较长时间，单独设置 90 秒超时
       }),
       analyticsStore.fetchSportRecords(userId, { pageNum: 1, pageSize: 1000 })
     ])

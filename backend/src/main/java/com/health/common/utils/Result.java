@@ -35,6 +35,16 @@ public class Result<T> {
                 .setMessage(ResultCode.VALIDATE_FAILED.getMessage());
     }
 
+    public static <T> Result<T> tooManyRequests() {
+        return new Result<T>().setCode(ResultCode.TOO_MANY_REQUESTS.getCode())
+                .setMessage(ResultCode.TOO_MANY_REQUESTS.getMessage());
+    }
+
+    public static <T> Result<T> tooManyRequests(String message) {
+        return new Result<T>().setCode(ResultCode.TOO_MANY_REQUESTS.getCode())
+                .setMessage(message);
+    }
+
     public Result<T> setCode(int code) {
         this.code = code;
         return this;

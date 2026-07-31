@@ -1,15 +1,22 @@
 package com.health.controller;
 
-import com.health.common.utils.JwtUtil;
+import com.health.common.annotation.RateLimit;
+import com.health.common.annotation.RateLimit.LimitType;
 import com.health.common.utils.Result;
+import com.health.common.utils.SecurityUtil;
 import com.health.domain.dto.UserLoginDTO;
 import com.health.domain.dto.UserRegisterDTO;
 import com.health.domain.vo.UserVO;
+import com.health.service.TokenBlacklistService;
 import com.health.service.UserService;
+import com.health.common.utils.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Date;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api/user")
@@ -21,132 +28,110 @@ public class UserController {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private TokenBlacklistService tokenBlacklistService;
+
+    @Autowired
+    private SecurityUtil securityUtil;
+
     @PostMapping("/login")
+    @RateLimit(key = "login", maxRequests = 5, timeWindow = 1, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.IP)
     public Result<String> login(@RequestBody @Valid UserLoginDTO userLoginDTO) {
         String token = userService.login(userLoginDTO);
         return Result.success(token);
     }
 
     @PostMapping("/register")
+    @RateLimit(key = "register", maxRequests = 3, timeWindow = 1, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.IP)
     public Result<Void> register(@RequestBody @Valid UserRegisterDTO userRegisterDTO) {
         userService.register(userRegisterDTO);
         return Result.success();
     }
 
-    @GetMapping("/info")
-    public Result getInfo(HttpServletRequest request) {
-        // 从请求头中获取token
+    /**
+     * 用户登出接口
+     * 将当前 token 加入黑名单
+     */
+    @PostMapping("/logout")
+    public Result<Void> logout(HttpServletRequest request) {
         String authorization = request.getHeader("Authorization");
         if (authorization != null && authorization.startsWith("Bearer ")) {
             String token = authorization.substring(7);
             try {
-                // 从token中获取用户名
-                String username = jwtUtil.extractUsername(token);
-                // 根据用户名获取用户信息
-                var userInfo = userService.getUserInfoByUsername(username);
-                return Result.success(userInfo);
-            } catch (Exception e) {
-                return Result.failed("获取用户信息失败: " + e.getMessage());
+                Date expiration = jwtUtil.getExpirationDateFromToken(token);
+                tokenBlacklistService.addToBlacklist(token, expiration);
+            } catch (Exception ignored) {
+                // Token 解析失败也返回成功
             }
         }
-        return Result.failed("未提供认证令牌");
+        return Result.success();
     }
 
+    /**
+     * 获取当前登录用户信息
+     */
+    @GetMapping("/info")
+    public Result<UserVO> getUserInfo() {
+        Long currentUserId = securityUtil.getCurrentUserId();
+        UserVO userInfo = userService.getUserInfo(currentUserId);
+        return Result.success(userInfo);
+    }
+
+    /**
+     * 更新当前登录用户信息
+     */
     @PutMapping("/info")
-    public Result updateUserInfo(@RequestBody UserVO userVO) {
+    public Result<Void> updateUserInfo(@RequestBody UserVO userVO) {
+        Long currentUserId = securityUtil.getCurrentUserId();
+        // 强制使用当前用户ID，防止修改他人信息
+        userVO.setId(currentUserId);
         userService.updateUserInfo(userVO);
         return Result.success();
     }
 
+    /**
+     * 获取用户状态（仅管理员可用）
+     */
     @GetMapping("/status/{userId}")
     public Result<Integer> getUserStatus(@PathVariable Long userId) {
-        try {
-            Integer status = userService.getUserStatus(userId);
-            return Result.success(status);
-        } catch (Exception e) {
-            return Result.failed(e.getMessage());
-        }
+        securityUtil.requireAdmin();
+        Integer status = userService.getUserStatus(userId);
+        return Result.success(status);
     }
 
+    /**
+     * 更新用户状态（仅管理员可用）
+     */
     @PutMapping("/status/{userId}")
-    public Result updateUserStatus(@PathVariable Long userId, @RequestParam Integer status) {
-        try {
-            userService.updateUserStatus(userId, status);
-            String statusText = status == 1 ? "启用" : "禁用";
-            return Result.success("用户状态已更新为：" + statusText);
-        } catch (Exception e) {
-            return Result.failed(e.getMessage());
-        }
+    public Result<String> updateUserStatus(@PathVariable Long userId, @RequestParam Integer status) {
+        securityUtil.requireAdmin();
+        userService.updateUserStatus(userId, status);
+        String statusText = status == 1 ? "启用" : "禁用";
+        return Result.success("用户状态已更新为：" + statusText);
     }
 
     /**
      * 管理员专用：启用或禁用用户账号
-     * @param request HTTP请求，用于获取token验证权限
-     * @param userId 要操作的用户ID
-     * @param status 状态值：0-禁用，1-启用
-     * @return 操作结果
      */
     @PutMapping("/admin/toggle-status/{userId}")
-    public Result adminToggleUserStatus(HttpServletRequest request,
-                                        @PathVariable Long userId,
-                                        @RequestParam Integer status) {
-        // 从请求头中获取token
-        String authorization = request.getHeader("Authorization");
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            return Result.failed("未提供认证令牌");
+    public Result<String> adminToggleUserStatus(@PathVariable Long userId, @RequestParam Integer status) {
+        // SecurityConfig 已配置 /api/user/admin/** 需要 ROLE_ADMIN
+        if (status != 0 && status != 1) {
+            return Result.failed("无效的状态值，只能为0（禁用）或1（启用）");
         }
-
-        String token = authorization.substring(7);
-        try {
-            // 验证是否为管理员
-            if (!jwtUtil.isAdmin(token)) {
-                return Result.failed("权限不足，仅管理员可执行此操作");
-            }
-
-            // 验证状态值
-            if (status != 0 && status != 1) {
-                return Result.failed("无效的状态值，只能为0（禁用）或1（启用）");
-            }
-
-            // 执行状态更新
-            userService.updateUserStatus(userId, status);
-            String statusText = status == 1 ? "启用" : "禁用";
-            String operatorUsername = jwtUtil.extractUsername(token);
-            return Result.success("管理员 [" + operatorUsername + "] 已将用户状态更新为：" + statusText);
-        } catch (Exception e) {
-            return Result.failed("操作失败: " + e.getMessage());
-        }
+        userService.updateUserStatus(userId, status);
+        String statusText = status == 1 ? "启用" : "禁用";
+        return Result.success("用户状态已更新为：" + statusText);
     }
 
     /**
      * 管理员专用：获取用户列表
-     * @param request HTTP请求，用于获取token验证权限
-     * @param pageNum 页码
-     * @param pageSize 每页数量
-     * @return 用户列表分页数据
      */
     @GetMapping("/admin/list")
-    public Result getUserList(HttpServletRequest request,
-                              @RequestParam(defaultValue = "1") int pageNum,
-                              @RequestParam(defaultValue = "10") int pageSize) {
-        // 从请求头中获取token
-        String authorization = request.getHeader("Authorization");
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            return Result.failed("未提供认证令牌");
-        }
-
-        String token = authorization.substring(7);
-        try {
-            // 验证是否为管理员
-            if (!jwtUtil.isAdmin(token)) {
-                return Result.failed("权限不足，仅管理员可查看用户列表");
-            }
-
-            // 获取用户列表
-            var page = userService.getUserList(pageNum, pageSize);
-            return Result.success(page);
-        } catch (Exception e) {
-            return Result.failed("获取用户列表失败: " + e.getMessage());
-        }
+    public Result<?> getUserList(@RequestParam(defaultValue = "1") int pageNum,
+                                 @RequestParam(defaultValue = "10") int pageSize) {
+        // SecurityConfig 已配置 /api/user/admin/** 需要 ROLE_ADMIN
+        var page = userService.getUserList(pageNum, pageSize);
+        return Result.success(page);
     }
 }

@@ -52,4 +52,9 @@ public interface ReminderService {
      * Import preferences from JSON
      */
     boolean importPreferences(Long userId, String jsonData);
+
+    /**
+     * 获取提醒偏好所属用户ID（用于权限校验）
+     */
+    Long getOwnerUserId(Long preferenceId);
 }
