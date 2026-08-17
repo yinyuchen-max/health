@@ -21,15 +21,21 @@ class AppointmentConversationServiceTest {
 
     private DoctorAppointmentService doctorAppointmentService;
     private AppointmentInformationExtractor informationExtractor;
+    private DoctorService doctorService;
+    private UserService userService;
     private AppointmentConversationServiceImpl conversationService;
 
     @BeforeEach
     void setUp() {
         doctorAppointmentService = mock(DoctorAppointmentService.class);
         informationExtractor = mock(AppointmentInformationExtractor.class);
+        doctorService = mock(DoctorService.class);
+        userService = mock(UserService.class);
         conversationService = new AppointmentConversationServiceImpl(
                 doctorAppointmentService,
-                informationExtractor
+                informationExtractor,
+                doctorService,
+                userService
         );
     }
 

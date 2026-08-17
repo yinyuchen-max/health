@@ -17,6 +17,35 @@ const routes = [
     component: () => import('../views/Register.vue')
   },
   {
+    path: '/doctor-register',
+    name: 'DoctorRegister',
+    component: () => import('../views/DoctorRegister.vue')
+  },
+  {
+    path: '/doctor',
+    component: () => import('../components/DoctorLayout.vue'),
+    children: [
+      {
+        path: 'dashboard',
+        name: 'DoctorDashboard',
+        component: () => import('../views/DoctorDashboard.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'appointments',
+        name: 'DoctorAppointments',
+        component: () => import('../views/DoctorAppointments.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'conversations',
+        name: 'DoctorConversations',
+        component: () => import('../views/DoctorConversations.vue'),
+        meta: { requiresAuth: true }
+      }
+    ]
+  },
+  {
     path: '/app',
     component: () => import('../components/Layout.vue'),
     children: [
@@ -78,6 +107,24 @@ const routes = [
         path: 'user-management',
         name: 'UserManagement',
         component: () => import('../views/UserManagement.vue'),
+        meta: { requiresAuth: true, requiresAdmin: true }
+      },
+      {
+        path: 'doctors',
+        name: 'DoctorList',
+        component: () => import('../views/DoctorList.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'doctor-chat',
+        name: 'DoctorChat',
+        component: () => import('../views/DoctorChat.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'doctor-management',
+        name: 'DoctorManagement',
+        component: () => import('../views/DoctorManagement.vue'),
         meta: { requiresAuth: true, requiresAdmin: true }
       }
     ]

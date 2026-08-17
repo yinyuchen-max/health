@@ -46,6 +46,18 @@
           <el-icon><ChatDotRound /></el-icon>
           <span>AI 对话</span>
         </el-menu-item>
+        <el-menu-item index="/app/doctors">
+          <el-icon><FirstAidKit /></el-icon>
+          <span>医生列表</span>
+        </el-menu-item>
+        <el-menu-item index="/app/doctor-chat">
+          <el-icon><ChatLineRound /></el-icon>
+          <span>医生咨询</span>
+        </el-menu-item>
+        <el-menu-item v-if="isDoctor" index="/doctor/dashboard">
+          <el-icon><UserFilled /></el-icon>
+          <span>医生工作台</span>
+        </el-menu-item>
         <el-menu-item index="/app/profile">
           <el-icon><User /></el-icon>
           <span>个人信息</span>
@@ -53,6 +65,10 @@
         <el-menu-item v-if="isAdmin" index="/app/user-management">
           <el-icon><Setting /></el-icon>
           <span>用户管理</span>
+        </el-menu-item>
+        <el-menu-item v-if="isAdmin" index="/app/doctor-management">
+          <el-icon><Setting /></el-icon>
+          <span>医生审核</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -83,9 +99,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
+import request from '../utils/request'
 import {
   Bell,
   ChatDotRound,
@@ -98,7 +115,10 @@ import {
   SwitchButton,
   Timer,
   TrendCharts,
-  User
+  User,
+  FirstAidKit,
+  ChatLineRound,
+  UserFilled
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -108,10 +128,23 @@ const userStore = useUserStore()
 const activeMenu = computed(() => route.path)
 const isAdmin = computed(() => userStore.userInfo?.username === 'admin')
 
+// 医生角色检测
+const isDoctor = ref(false)
+const checkDoctorStatus = async () => {
+  try {
+    const res = await request.get('/doctor/check')
+    isDoctor.value = res?.data === true || res === true
+  } catch {
+    isDoctor.value = false
+  }
+}
+
 const handleLogout = () => {
   userStore.logout()
   router.push('/')
 }
+
+onMounted(checkDoctorStatus)
 </script>
 
 <style scoped>

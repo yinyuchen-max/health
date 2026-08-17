@@ -92,8 +92,6 @@ public class RedisConfig {
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
         // 用户信息缓存 30 分钟
         cacheConfigurations.put("user:info", defaultConfig.entryTtl(Duration.ofMinutes(30)));
-        // 智能健康总览缓存 10 分钟（计算成本高）
-        cacheConfigurations.put("smart:overview", defaultConfig.entryTtl(Duration.ofMinutes(10)));
         // 提醒偏好缓存 1 小时
         cacheConfigurations.put("reminder:pref", defaultConfig.entryTtl(Duration.ofHours(1)));
 

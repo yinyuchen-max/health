@@ -22,11 +22,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -60,6 +63,17 @@ public class SmartHealthServiceImpl implements SmartHealthService {
     @Value("${langchain4j.fallback.ai-timeout-ms:3000}")
     private long aiTimeoutMs;
 
+    /**
+     * 智能健康报告缓存时长（天）：数据指纹不变时命中缓存，避免重复调用 AI
+     */
+    @Value("${smart-health.cache-ttl-days:7}")
+    private long cacheTtlDays;
+
+    private static final String OVERVIEW_CACHE_KEY_PREFIX = "smart:overview:";
+
+    @Autowired(required = false)
+    private StringRedisTemplate stringRedisTemplate;
+
     public SmartHealthServiceImpl(
             HealthRecordMapper healthRecordMapper,
             SportRecordMapper sportRecordMapper,
@@ -89,11 +103,19 @@ public class SmartHealthServiceImpl implements SmartHealthService {
     }
 
     @Override
-    @Cacheable(value = "smart:overview", key = "#userId")
     public SmartHealthOverviewDTO generateOverview(Long userId) {
         User user = userMapper.selectById(userId);
         List<HealthRecord> healthRecords = loadHealthRecords(userId);
         List<SportRecord> sportRecords = loadSportRecords(userId);
+
+        // 基于健康/运动数据计算指纹：数据不变则指纹不变，直接返回缓存，节省 AI 调用
+        String fingerprint = computeDataFingerprint(user, healthRecords, sportRecords);
+        String cacheKey = OVERVIEW_CACHE_KEY_PREFIX + userId + ":" + fingerprint;
+        SmartHealthOverviewDTO cached = readOverviewFromCache(cacheKey, userId);
+        if (cached != null) {
+            return cached;
+        }
+
         HealthRecord latestHealthRecord = healthRecords.isEmpty() ? null : healthRecords.get(0);
 
         Double bmi = calculateBmi(user, latestHealthRecord);
@@ -109,6 +131,7 @@ public class SmartHealthServiceImpl implements SmartHealthService {
         SmartHealthOverviewDTO aiResult = tryGenerateWithAI(user, healthRecords, sportRecords,
                 bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord, retrievedKnowledge);
         if (aiResult != null) {
+            writeOverviewToCache(cacheKey, aiResult, userId);
             return aiResult;
         }
 
@@ -125,7 +148,86 @@ public class SmartHealthServiceImpl implements SmartHealthService {
         overview.setStressInsight(buildStressInsight(avgHeartRate, weeklyExerciseMinutes, latestHealthRecord));
         overview.setOverallStatus(buildOverallStatus(overview.getRiskAssessments()));
         overview.setQuickTips(buildQuickTips(overview));
+        writeOverviewToCache(cacheKey, overview, userId);
         return overview;
+    }
+
+    // ==================== Redis 缓存与数据指纹 ====================
+
+    /**
+     * 计算数据指纹：用户体征 + 全部健康记录 + 全部运动记录。
+     * 任何一条记录的新增/修改/删除都会导致指纹变化，从而触发重新生成。
+     */
+    private String computeDataFingerprint(User user, List<HealthRecord> healthRecords, List<SportRecord> sportRecords) {
+        StringBuilder sb = new StringBuilder();
+        if (user != null) {
+            sb.append(user.getAge()).append('|')
+                    .append(user.getGender()).append('|')
+                    .append(user.getHeight()).append('|')
+                    .append(user.getWeight()).append(';');
+        }
+        sb.append('H').append(healthRecords.size()).append('#');
+        for (HealthRecord r : healthRecords) {
+            sb.append(r.getId()).append(':')
+                    .append(r.getRecordDate()).append(':')
+                    .append(r.getBloodPressureSystolic()).append(':')
+                    .append(r.getBloodPressureDiastolic()).append(':')
+                    .append(r.getHeartRate()).append(':')
+                    .append(r.getBloodSugar()).append(':')
+                    .append(r.getWeight()).append(',');
+        }
+        sb.append('S').append(sportRecords.size()).append('#');
+        for (SportRecord r : sportRecords) {
+            sb.append(r.getId()).append(':')
+                    .append(r.getRecordDate()).append(':')
+                    .append(r.getSportType()).append(':')
+                    .append(r.getDuration()).append(':')
+                    .append(r.getIntensity()).append(',');
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(sb.toString().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : hash) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (Exception e) {
+            // 极端情况下退化为直接用字符串 hash
+            return Integer.toHexString(sb.toString().hashCode());
+        }
+    }
+
+    private SmartHealthOverviewDTO readOverviewFromCache(String cacheKey, Long userId) {
+        if (stringRedisTemplate == null) {
+            return null;
+        }
+        try {
+            String json = stringRedisTemplate.opsForValue().get(cacheKey);
+            if (json == null || json.isBlank()) {
+                return null;
+            }
+            SmartHealthOverviewDTO cached = objectMapper.readValue(json, SmartHealthOverviewDTO.class);
+            cached.setUserId(userId);
+            log.info("智能健康报告命中缓存，跳过 AI 调用, userId={}", userId);
+            return cached;
+        } catch (Exception e) {
+            log.warn("读取智能健康报告缓存失败，重新生成, userId={}: {}", userId, e.getMessage());
+            return null;
+        }
+    }
+
+    private void writeOverviewToCache(String cacheKey, SmartHealthOverviewDTO overview, Long userId) {
+        if (stringRedisTemplate == null || overview == null) {
+            return;
+        }
+        try {
+            String json = objectMapper.writeValueAsString(overview);
+            stringRedisTemplate.opsForValue().set(cacheKey, json, Duration.ofDays(cacheTtlDays));
+            log.info("智能健康报告已写入缓存, userId={}, ttl={}天", userId, cacheTtlDays);
+        } catch (Exception e) {
+            log.warn("写入智能健康报告缓存失败, userId={}: {}", userId, e.getMessage());
+        }
     }
 
     private List<HealthRecord> loadHealthRecords(Long userId) {

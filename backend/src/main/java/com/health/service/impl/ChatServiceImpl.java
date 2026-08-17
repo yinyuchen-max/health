@@ -8,14 +8,21 @@ import com.health.service.AppointmentConversationService;
 import com.health.service.HealthRecordService;
 import com.health.service.SportRecordService;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.response.PartialThinking;
+import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -39,17 +46,20 @@ public class ChatServiceImpl implements ChatService {
             """;
 
     private final ChatModel chatModel;
+    private final StreamingChatModel streamingChatModel;
     private final AppointmentConversationService appointmentConversationService;
     private final HealthRecordService healthRecordService;
     private final SportRecordService sportRecordService;
     private final RedisChatMemoryStore redisChatMemoryStore;
 
     public ChatServiceImpl(ChatModel chatModel,
+                           StreamingChatModel streamingChatModel,
                            AppointmentConversationService appointmentConversationService,
                            HealthRecordService healthRecordService,
                            SportRecordService sportRecordService,
                            RedisChatMemoryStore redisChatMemoryStore) {
         this.chatModel = chatModel;
+        this.streamingChatModel = streamingChatModel;
         this.appointmentConversationService = appointmentConversationService;
         this.healthRecordService = healthRecordService;
         this.sportRecordService = sportRecordService;
@@ -60,8 +70,7 @@ public class ChatServiceImpl implements ChatService {
     public ChatResponseDTO chat(String userMessage, Long userId) {
         if (userMessage == null || userMessage.isBlank()) {
             ChatResponseDTO dto = new ChatResponseDTO();
-            dto.setReply(appointmentConversationService.appendAppointmentOffer(
-                    "请告诉我您想咨询的健康问题，我会尽力为您解答。", userId));
+            dto.setReply("请告诉我您想咨询的健康问题，我会尽力为您解答。");
             return dto;
         }
 
@@ -74,31 +83,11 @@ public class ChatServiceImpl implements ChatService {
 
         try {
             // 获取当前用户的对话记忆（使用 Redis 存储）
-            Object memoryId = userId != null ? userId : "default";
-            log.info("AI 对话请求 - userId: {}, memoryId: {}", userId, memoryId);
-            
-            // 使用 Redis 存储的聊天记忆
-            var chatMemory = MessageWindowChatMemory.builder()
-                    .chatMemoryStore(redisChatMemoryStore)
-                    .id(memoryId)
-                    .maxMessages(20)
-                    .build();
-            
+            var chatMemory = buildChatMemory(userId);
             log.info("当前用户历史消息数: {}", chatMemory.messages().size());
-            
+
             // 构建完整的消息列表（系统提示 + 用户健康数据 + 历史对话 + 当前用户消息）
-            var messages = new java.util.ArrayList<dev.langchain4j.data.message.ChatMessage>();
-            
-            // 添加系统提示
-            String systemPromptWithUserData = buildSystemPromptWithUserData(userId);
-            messages.add(SystemMessage.from(systemPromptWithUserData));
-            
-            // 添加历史对话
-            messages.addAll(chatMemory.messages());
-            
-            // 添加当前用户消息
-            messages.add(UserMessage.from(userMessage));
-            
+            var messages = buildMessages(userMessage, userId, chatMemory);
             log.info("发送给 AI 的总消息数: {}", messages.size());
             
             // 调用 AI 模型
@@ -112,17 +101,116 @@ public class ChatServiceImpl implements ChatService {
             log.info("保存后记忆中的消息数: {}", chatMemory.messages().size());
 
             ChatResponseDTO dto = new ChatResponseDTO();
-            dto.setReply(appointmentConversationService.appendAppointmentOffer(aiReply, userId));
+            dto.setReply(aiReply);
             return dto;
         } catch (Exception e) {
             log.error("AI 对话失败: {}", e.getMessage(), e);
             ChatResponseDTO dto = new ChatResponseDTO();
-            dto.setReply(appointmentConversationService.appendAppointmentOffer(
-                    "抱歉，AI 服务暂时不可用，请稍后再试。您也可以查看「智能健康」页面获取系统评估。", userId));
+            dto.setReply("抱歉，AI 服务暂时不可用，请稍后再试。您也可以查看「智能健康」页面获取系统评估。");
             return dto;
         }
     }
     
+    @Override
+    public void chatStream(String userMessage, Long userId, ChatService.StreamCallback callback) {
+        if (userMessage == null || userMessage.isBlank()) {
+            String reply = "请告诉我您想咨询的健康问题，我会尽力为您解答。";
+            callback.onToken(reply);
+            callback.onComplete(reply);
+            return;
+        }
+
+        // 预约会话走结构化流程，直接整体返回（无 token 流）
+        String appointmentReply = appointmentConversationService.handleMessage(userMessage, userId);
+        if (appointmentReply != null) {
+            callback.onToken(appointmentReply);
+            callback.onComplete(appointmentReply);
+            return;
+        }
+
+        try {
+            var chatMemory = buildChatMemory(userId);
+            var messages = buildMessages(userMessage, userId, chatMemory);
+            log.info("AI 流式对话 - userId: {}, 总消息数: {}", userId, messages.size());
+
+            StringBuilder tokenBuffer = new StringBuilder();
+            streamingChatModel.chat(ChatRequest.builder().messages(messages).build(),
+                    new StreamingChatResponseHandler() {
+                        @Override
+                        public void onPartialThinking(PartialThinking partialThinking) {
+                            // 推理模型的思考过程：实时转发给前端展示
+                            String text = partialThinking.text();
+                            if (text != null && !text.isEmpty()) {
+                                callback.onThinking(text);
+                            }
+                        }
+
+                        @Override
+                        public void onPartialResponse(String partialResponse) {
+                            if (partialResponse != null && !partialResponse.isEmpty()) {
+                                tokenBuffer.append(partialResponse);
+                                callback.onToken(partialResponse);
+                            }
+                        }
+
+                        @Override
+                        public void onCompleteResponse(ChatResponse completeResponse) {
+                            String aiReply = completeResponse.aiMessage() != null
+                                    ? completeResponse.aiMessage().text()
+                                    : null;
+                            if (aiReply == null || aiReply.isBlank()) {
+                                aiReply = tokenBuffer.toString();
+                            }
+                            if (aiReply == null || aiReply.isBlank()) {
+                                aiReply = "抱歉，AI 服务暂时不可用，请稍后再试。";
+                            }
+
+                            // 保存用户消息和 AI 回复到 Redis 记忆
+                            chatMemory.add(UserMessage.from(userMessage));
+                            chatMemory.add(AiMessage.from(aiReply));
+
+                            callback.onComplete(aiReply);
+                        }
+
+                        @Override
+                        public void onError(Throwable error) {
+                            log.error("AI 流式对话失败: {}", error.getMessage(), error);
+                            String fallback = "抱歉，AI 服务暂时不可用，请稍后再试。您也可以查看「智能健康」页面获取系统评估。";
+                            callback.onToken(fallback);
+                            callback.onComplete(fallback);
+                        }
+                    });
+        } catch (Exception e) {
+            log.error("AI 流式对话失败: {}", e.getMessage(), e);
+            String fallback = "抱歉，AI 服务暂时不可用，请稍后再试。您也可以查看「智能健康」页面获取系统评估。";
+            callback.onToken(fallback);
+            callback.onComplete(fallback);
+        }
+    }
+
+    /**
+     * 构建当前用户基于 Redis 的对话记忆窗口
+     */
+    private MessageWindowChatMemory buildChatMemory(Long userId) {
+        Object memoryId = userId != null ? userId : "default";
+        return MessageWindowChatMemory.builder()
+                .chatMemoryStore(redisChatMemoryStore)
+                .id(memoryId)
+                .maxMessages(20)
+                .build();
+    }
+
+    /**
+     * 构建发送给 AI 的消息列表（系统提示 + 用户健康数据 + 历史对话 + 当前消息）
+     */
+    private List<ChatMessage> buildMessages(String userMessage, Long userId, MessageWindowChatMemory chatMemory) {
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(SystemMessage.from(buildSystemPromptWithUserData(userId)));
+        messages.addAll(chatMemory.messages());
+        messages.add(UserMessage.from(userMessage));
+        return messages;
+    }
+
     /**
      * 构建包含用户健康数据的系统提示
      */

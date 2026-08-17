@@ -173,16 +173,20 @@ export const useReminderStore = defineStore('reminder', {
     },
 
     async deletePreference(id) {
+      if (!id || id === 'undefined') {
+        console.warn('删除提醒: id 无效, 跳过')
+        return false
+      }
       this.loading = true
       this.error = null
       try {
         const response = await request.delete(`/reminder/preferences/${id}`)
 
-        if (response.success) {
+        if (response && (response.code === 200 || response.success)) {
           this.preferences = this.preferences.filter(p => p.id !== id)
           return true
         } else {
-          this.error = response.message || '删除失败'
+          this.error = response?.message || '删除失败'
           return false
         }
       } catch (error) {

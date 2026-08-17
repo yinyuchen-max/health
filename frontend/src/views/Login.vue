@@ -73,6 +73,9 @@
                 去注册
               </el-button>
             </div>
+            <div class="doctor-link">
+              <span class="link-text" @click="handleDoctorRegister">注册医生 →</span>
+            </div>
           </el-form>
         </div>
       </div>
@@ -174,8 +177,17 @@ const handleLogin = () => {
         showClose: true
       })
 
+      // 判断是否为已审核医生，医生自动进入医生端
+      let isDoctor = false
+      try {
+        const doctorCheck = await request.get('/doctor/check')
+        isDoctor = doctorCheck?.data === true || doctorCheck === true
+      } catch {
+        isDoctor = false
+      }
+
       setTimeout(() => {
-        router.push('/app/dashboard')
+        router.push(isDoctor ? '/doctor/dashboard' : '/app/dashboard')
       }, 500)
     } catch (error) {
       let errorMessage = error?.message || '登录失败'
@@ -210,6 +222,10 @@ const handleLogin = () => {
 
 const handleRegister = () => {
   router.push('/register')
+}
+
+const handleDoctorRegister = () => {
+  router.push('/doctor-register')
 }
 </script>
 
@@ -317,6 +333,22 @@ const handleRegister = () => {
   grid-template-columns: 1fr 1fr;
   gap: 14px;
   margin-top: 18px;
+}
+
+.doctor-link {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.link-text {
+  font-size: 13px;
+  color: #6e7787;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.link-text:hover {
+  color: #1f2430;
 }
 
 .login-button,

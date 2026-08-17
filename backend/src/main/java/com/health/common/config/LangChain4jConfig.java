@@ -1,9 +1,11 @@
 package com.health.common.config;
 
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,6 +56,21 @@ public class LangChain4jConfig {
                 .baseUrl(baseUrl)
                 .temperature(temperature)
                 .timeout(Duration.ofSeconds(timeout))
+                .logRequests(true)
+                .logResponses(true)
+                .build();
+    }
+
+    @Bean
+    public StreamingChatModel streamingChatModel() {
+        log.info("初始化 LangChain4j StreamingChatModel: model={}, baseUrl={}", modelName, baseUrl);
+        return OpenAiStreamingChatModel.builder()
+                .apiKey(chatApiKey)
+                .modelName(modelName)
+                .baseUrl(baseUrl)
+                .temperature(temperature)
+                .timeout(Duration.ofSeconds(timeout))
+                .returnThinking(true)   // 解析 reasoning_content（思考过程），供前端实时展示
                 .logRequests(true)
                 .logResponses(true)
                 .build();

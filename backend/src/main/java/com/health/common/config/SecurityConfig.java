@@ -3,6 +3,7 @@ package com.health.common.config;
 import com.health.common.filter.JwtAuthenticationFilter;
 import com.health.common.utils.Result;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -16,6 +17,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.firewall.StrictHttpFirewall;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.util.matcher.DispatcherTypeRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -66,8 +68,13 @@ public class SecurityConfig implements WebMvcConfigurer {
 
             // 授权规则
             .authorizeHttpRequests(auth -> auth
-                // 公开接口：登录、注册
-                .requestMatchers("/api/user/login", "/api/user/register").permitAll()
+                // ASYNC 分发（SseEmitter/异步请求触发的二次分发）放行。
+                // 该分发不会重新执行 JwtAuthenticationFilter，SecurityContext 为空，
+                // 若走 /api/** 的 authenticated 规则会抛 AccessDeniedException。
+                // 初始 REQUEST 已完成认证授权，放行 ASYNC 分发是安全的。
+                .requestMatchers(new DispatcherTypeRequestMatcher(DispatcherType.ASYNC)).permitAll()
+                // 公开接口：登录、注册、医生列表、医生注册
+                .requestMatchers("/api/user/login", "/api/user/register", "/api/doctor/list", "/api/doctor/full-register").permitAll()
                 // 管理员接口：需要 ADMIN 角色
                 .requestMatchers("/api/user/admin/**").hasRole("ADMIN")
                 // 其他所有 /api/** 接口需要认证

@@ -2,13 +2,17 @@ package com.health.controller;
 
 import com.health.common.annotation.RateLimit;
 import com.health.common.annotation.RateLimit.LimitType;
+import com.health.common.exception.ForbiddenException;
 import com.health.common.utils.Result;
 import com.health.common.utils.SecurityUtil;
 import com.health.domain.dto.HealthRecordDTO;
 import com.health.domain.vo.HealthRecordVO;
+import com.health.service.DoctorService;
 import com.health.service.HealthRecordService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,6 +29,9 @@ public class HealthRecordController {
     @Autowired
     private SecurityUtil securityUtil;
 
+    @Autowired
+    private DoctorService doctorService;
+
     @PostMapping("/record")
     @RateLimit(key = "health-record-write", maxRequests = 30, timeWindow = 1, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.USER)
     public Result<Void> addHealthRecord(@RequestBody @Valid HealthRecordDTO healthRecordDTO) {
@@ -40,10 +47,20 @@ public class HealthRecordController {
             @PathVariable Long userId,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize) {
-        // 校验是否有权查看该用户的数据
-        securityUtil.requireOwnerOrAdmin(userId);
+        // 权限：本人、管理员、或存在预约关系的医生
+        Long currentUserId = securityUtil.getCurrentUserId();
+        boolean allowed = currentUserId.equals(userId) || isAdmin() || doctorService.canViewPatient(currentUserId, userId);
+        if (!allowed) {
+            throw new ForbiddenException("无权查看该用户的健康报告");
+        }
         Map<String, Object> records = healthRecordService.getHealthRecordsByUserId(userId, pageNum, pageSize);
         return Result.success(records);
+    }
+
+    private boolean isAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
     }
 
     @DeleteMapping("/record/{id}")

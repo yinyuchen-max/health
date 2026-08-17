@@ -430,9 +430,13 @@ const clearAllSettings = () => {
       type: 'warning'
     }
   ).then(async () => {
-    for (const preference of reminderStore.preferences) {
-      await reminderStore.deletePreference(preference.id)
+    const prefs = [...reminderStore.preferences]
+    for (const preference of prefs) {
+      if (preference.id) {
+        await reminderStore.deletePreference(preference.id)
+      }
     }
+    reminderStore.preferences = []
     ElMessage.success('所有设置已清除')
   }).catch(() => {})
 }

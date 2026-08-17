@@ -4,11 +4,11 @@ services:
     container_name: health-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
       MYSQL_DATABASE: health_system
       TZ: Asia/Shanghai
     ports:
-      - "3308:3306"
+      - "127.0.0.1:3308:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./backend/database/health_system.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
@@ -26,7 +26,7 @@ services:
     container_name: health-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     environment:
@@ -42,8 +42,8 @@ services:
     container_name: health-rabbitmq
     restart: unless-stopped
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-admin123}
@@ -70,7 +70,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/health_system?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: 123456
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       HEALTH_RAG_REDIS_HOST: redis
@@ -82,15 +82,15 @@ services:
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:80}"
       MAIL_HOST: "${MAIL_HOST:-smtp.qq.com}"
       MAIL_PORT: "${MAIL_PORT:-465}"
-      MAIL_USERNAME: "${MAIL_USERNAME:-}"
-      MAIL_PASSWORD: "${MAIL_PASSWORD:-}"
+      MAIL_USERNAME: "${MAIL_USERNAME:-2212169296@qq.com}"
+      MAIL_PASSWORD: "${MAIL_PASSWORD:-vprekpwostsvecij}"
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: "${RABBITMQ_USER:-admin}"
       RABBITMQ_PASS: "${RABBITMQ_PASS:-admin123}"
       TZ: Asia/Shanghai
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
 
   frontend:
     build:
@@ -100,7 +100,19 @@ services:
     depends_on:
       - backend
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"    # 改为仅本地访问，安全起见
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: health-cloudflared
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflared/credentials.json:/etc/cloudflared/credentials.json:ro
+
 
 volumes:
   mysql-data:

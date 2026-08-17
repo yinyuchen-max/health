@@ -8,17 +8,16 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("doctor_appointment")
-public class DoctorAppointment {
+@TableName("doctor_message")
+public class DoctorMessage {
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Long userId;
-    private String patientName;
-    private Integer age;
-    private LocalDateTime appointmentTime;
-    private String phone;
-    private String department;
     private Long doctorId;
-    private String status;         // pending, confirmed, completed, cancelled
+    private Long userId;
+    private Long senderId;
+    private String senderType;  // user, doctor
+    private String content;
+    private Integer isRead;     // 0-未读, 1-已读
     private LocalDateTime createdAt;
+    private Integer deleted;
 }
