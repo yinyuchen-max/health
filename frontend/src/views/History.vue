@@ -260,7 +260,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .history-container {
-  padding: 20px;
+  padding: 0;
 }
 
 .card-header {
@@ -273,5 +273,34 @@ onBeforeUnmount(() => {
 
 .filter-form {
   margin-bottom: 20px;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .card-header {
+    font-size: 16px;
+  }
+
+  .filter-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .filter-form :deep(.el-form-item) {
+    margin-bottom: 8px;
+    margin-right: 0;
+    width: 100%;
+  }
+
+  .filter-form :deep(.el-form-item__content) {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .filter-form :deep(.el-select),
+  .filter-form :deep(.el-date-editor) {
+    width: 100% !important;
+  }
 }
 </style>

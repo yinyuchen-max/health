@@ -589,4 +589,65 @@ onBeforeUnmount(() => {
   color: #4b5563;
   line-height: 1.6;
 }
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .hero-card :deep(.el-card__body) {
+    padding: 18px;
+  }
+
+  .hero-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .hero-content h2 {
+    font-size: 18px;
+  }
+
+  .hero-desc {
+    font-size: 13px;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .hero-actions .el-button {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .stat-card {
+    min-height: auto;
+  }
+
+  .stat-value {
+    font-size: 24px;
+    margin-top: 8px;
+  }
+
+  .stat-label {
+    font-size: 13px;
+  }
+
+  .chart-card {
+    min-height: auto;
+  }
+
+  .chart {
+    height: 260px;
+  }
+
+  .tip-item,
+  .risk-item {
+    padding: 12px;
+  }
+
+  .section-title {
+    font-size: 14px;
+  }
+}
 </style>

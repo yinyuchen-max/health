@@ -94,11 +94,12 @@
       v-model="dialogVisible"
       :title="editingRecordId ? '编辑运动记录' : '新增运动记录'"
       width="680px"
+      class="responsive-dialog"
       @closed="resetForm"
     >
       <el-form ref="formRef" :model="formState" :rules="rules" label-width="100px">
         <el-row :gutter="16">
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="日期" prop="recordDate">
               <el-date-picker
                 v-model="formState.recordDate"
@@ -109,7 +110,7 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="运动类型" prop="sportType">
               <el-select v-model="formState.sportType" placeholder="选择运动类型" style="width: 100%">
                 <el-option v-for="item in sportOptions" :key="item" :label="item" :value="item" />
@@ -119,12 +120,12 @@
         </el-row>
 
         <el-row :gutter="16">
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="时长" prop="duration">
               <el-input-number v-model="formState.duration" :min="1" :max="1440" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="强度" prop="intensity">
               <el-select v-model="formState.intensity" placeholder="选择强度" style="width: 100%">
                 <el-option label="低强度" value="low" />
@@ -632,5 +633,51 @@ onBeforeUnmount(() => {
 
 .chart-half {
   height: 150px;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .summary-card {
+    min-height: auto;
+  }
+
+  .summary-value {
+    font-size: 22px;
+    margin: 10px 0 6px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .toolbar-right {
+    flex-wrap: wrap;
+  }
+
+  .toolbar-right .el-input {
+    width: 100% !important;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .toolbar-right .el-date-editor {
+    width: 100% !important;
+  }
+
+  .chart {
+    height: 240px;
+  }
+
+  .inner-card {
+    min-height: auto;
+  }
 }
 </style>

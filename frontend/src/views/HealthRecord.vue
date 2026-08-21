@@ -97,11 +97,12 @@
       v-model="dialogVisible"
       :title="editingRecordId ? '编辑健康记录' : '新增健康记录'"
       width="720px"
+      class="responsive-dialog"
       @closed="resetForm"
     >
       <el-form ref="formRef" :model="formState" :rules="rules" label-width="100px">
         <el-row :gutter="16">
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="日期" prop="recordDate">
               <el-date-picker
                 v-model="formState.recordDate"
@@ -112,7 +113,7 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="体重" prop="weight">
               <el-input-number v-model="formState.weight" :min="20" :max="300" :step="0.1" style="width: 100%" />
             </el-form-item>
@@ -120,12 +121,12 @@
         </el-row>
 
         <el-row :gutter="16">
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="收缩压" prop="bloodPressureSystolic">
               <el-input-number v-model="formState.bloodPressureSystolic" :min="60" :max="250" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="舒张压" prop="bloodPressureDiastolic">
               <el-input-number v-model="formState.bloodPressureDiastolic" :min="40" :max="150" style="width: 100%" />
             </el-form-item>
@@ -133,12 +134,12 @@
         </el-row>
 
         <el-row :gutter="16">
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="心率" prop="heartRate">
               <el-input-number v-model="formState.heartRate" :min="40" :max="200" style="width: 100%" />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
+          <el-col :xs="24" :sm="12">
             <el-form-item label="血糖" prop="bloodSugar">
               <el-input-number v-model="formState.bloodSugar" :min="2" :max="30" :step="0.1" style="width: 100%" />
             </el-form-item>
@@ -563,5 +564,47 @@ onBeforeUnmount(() => {
 .chart {
   width: 100%;
   height: 320px;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .summary-card {
+    min-height: auto;
+  }
+
+  .summary-value {
+    font-size: 22px;
+    margin: 10px 0 6px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .toolbar-right {
+    flex-wrap: wrap;
+  }
+
+  .toolbar-right .el-input {
+    width: 100% !important;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .chart {
+    height: 240px;
+  }
+
+  .inner-card {
+    min-height: auto;
+  }
 }
 </style>

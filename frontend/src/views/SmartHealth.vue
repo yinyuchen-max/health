@@ -696,4 +696,46 @@ onBeforeUnmount(() => {
     font-size: 22px;
   }
 }
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .page-hero-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .page-hero-content h2 {
+    font-size: 20px;
+  }
+
+  .page-hero-content p {
+    font-size: 13px;
+  }
+
+  .chart-card {
+    min-height: auto;
+  }
+
+  .chart {
+    height: 240px;
+  }
+
+  .risk-list {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-card {
+    padding: 14px;
+  }
+
+  .panel-card ul {
+    padding-left: 14px;
+    font-size: 13px;
+  }
+
+  .card-header {
+    font-size: 14px;
+  }
+}
 </style>
