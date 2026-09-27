@@ -1,0 +1,64 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/dashboard/dashboard",
+    "pages/records/records",
+    "pages/discover/discover",
+    "pages/mine/mine",
+    "pages/health-record/health-record",
+    "pages/sport-record/sport-record",
+    "pages/sleep-record/sleep-record",
+    "pages/diet-record/diet-record",
+    "pages/bmi-calculator/bmi-calculator",
+    "pages/goal-setting/goal-setting",
+    "pages/history-record/history-record",
+    "pages/smart-health/smart-health",
+    "pages/ai-chat/ai-chat",
+    "pages/reminder/reminder",
+    "pages/doctor-list/doctor-list",
+    "pages/doctor-appointment/doctor-appointment",
+    "pages/user-profile/user-profile"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "健康生活",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f5f3ff",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#9ca3af",
+    "selectedColor": "#7c3aed",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/dashboard/dashboard",
+        "text": "首页",
+        "iconPath": "assets/icons/home.png",
+        "selectedIconPath": "assets/icons/home-active.png"
+      },
+      {
+        "pagePath": "pages/records/records",
+        "text": "记录",
+        "iconPath": "assets/icons/record.png",
+        "selectedIconPath": "assets/icons/record-active.png"
+      },
+      {
+        "pagePath": "pages/discover/discover",
+        "text": "发现",
+        "iconPath": "assets/icons/discover.png",
+        "selectedIconPath": "assets/icons/discover-active.png"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的",
+        "iconPath": "assets/icons/user.png",
+        "selectedIconPath": "assets/icons/user-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

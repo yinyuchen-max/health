@@ -1,0 +1,132 @@
+.mine-page {
+  min-height: 100vh;
+  background: #f5f3ff;
+  padding-bottom: 140rpx;
+}
+
+/* 用户头部 */
+.user-header {
+  display: flex;
+  align-items: center;
+  padding: 40rpx 32rpx;
+  background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+  margin-bottom: 20rpx;
+}
+
+.user-avatar-wrap {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 24rpx;
+}
+
+.user-avatar-text {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #fff;
+}
+
+.user-info-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #fff;
+  margin-bottom: 6rpx;
+}
+
+.user-slogan {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* 区域标题 */
+.section-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #1f2937;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+/* 数据图标 */
+.data-icons {
+  display: flex;
+  justify-content: space-around;
+}
+
+.data-icon-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.data-icon-bg {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10rpx;
+}
+
+.data-icon-body { background: linear-gradient(135deg, #ede9fe, #ddd6fe); }
+.data-icon-sport { background: linear-gradient(135deg, #d1fae5, #a7f3d0); }
+.data-icon-diet { background: linear-gradient(135deg, #fef3c7, #fde68a); }
+.data-icon-sleep { background: linear-gradient(135deg, #dbeafe, #bfdbfe); }
+
+.data-icon-emoji {
+  font-size: 36rpx;
+}
+
+.data-icon-name {
+  font-size: 22rpx;
+  color: #4b5563;
+}
+
+/* 菜单 */
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 28rpx 0;
+  border-bottom: 1rpx solid #f3f0ff;
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-emoji {
+  font-size: 36rpx;
+  margin-right: 16rpx;
+}
+
+.menu-text {
+  flex: 1;
+  font-size: 28rpx;
+  color: #374151;
+}
+
+.menu-arrow {
+  font-size: 28rpx;
+  color: #d1d5db;
+}
+
+/* 退出按钮 */
+.btn-logout {
+  margin: 32rpx 24rpx;
+  background: #fff;
+  color: #ef4444;
+  border: 2rpx solid #fecaca;
+  border-radius: 40rpx;
+  font-size: 30rpx;
+  padding: 24rpx 0;
+}

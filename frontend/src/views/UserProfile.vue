@@ -93,6 +93,13 @@
             {{ isSaving ? '保存中...' : '保存修改' }}
           </el-button>
         </el-form-item>
+
+        <el-form-item class="button-animate" style="animation-delay: 0.75s;">
+          <el-button type="info" plain class="password-button" @click="goChangePassword">
+            <el-icon><Lock /></el-icon>
+            修改密码
+          </el-button>
+        </el-form-item>
       </el-form>
 
       <div class="stats-row form-animation" style="animation-delay: 0.8s;">
@@ -117,9 +124,11 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Check,
+  Lock,
   Message,
   Phone,
   Star,
@@ -130,6 +139,7 @@ import {
 import { useUserStore } from '../store/user'
 import request from '../utils/request'
 
+const router = useRouter()
 const userStore = useUserStore()
 
 const isLoading = ref(true)
@@ -279,6 +289,10 @@ onMounted(() => {
   fetchProfile()
 })
 
+const goChangePassword = () => {
+  router.push('/app/change-password')
+}
+
 watch(
   () => userStore.userInfo?.id,
   (newId, oldId) => {
@@ -292,44 +306,35 @@ watch(
 <style scoped>
 .user-profile {
   padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
+  background: transparent;
+  min-height: auto;
 }
 
 .profile-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
+  background: #fff;
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  border: 1px solid #F0F4F8;
   max-width: 650px;
   margin: 0 auto;
   overflow: hidden;
 }
 
 .profile-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 40px rgba(64, 158, 255, 0.3);
+  transform: none;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .profile-header {
-  background: linear-gradient(135deg, #409EFF 0%, #66b1ff 100%);
-  padding: 40px 20px;
+  background: #fff;
+  padding: 32px 20px;
   text-align: center;
   position: relative;
-  overflow: hidden;
+  border-bottom: 1px solid #F0F4F8;
 }
 
 .profile-header::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-  animation: shimmer 3s infinite;
+  display: none;
 }
 
 @keyframes shimmer {
@@ -338,38 +343,29 @@ watch(
 }
 
 .avatar-circle {
-  width: 100px;
-  height: 100px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
+  background: #EBF5FF;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 20px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  animation: bounceIn 1s ease-out;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  margin: 0 auto 16px;
+  border: 3px solid #F0F4F8;
 }
 
 .title-animation {
-  color: white;
-  font-size: 28px;
+  color: #1E293B;
+  font-size: 24px;
   font-weight: 700;
   margin: 0 0 8px 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  animation: fadeInDown 0.8s ease-out;
-  position: relative;
-  z-index: 1;
+  text-shadow: none;
 }
 
 .subtitle-animation {
-  color: rgba(255, 255, 255, 0.9);
+  color: #64748B;
   font-size: 14px;
   margin: 0;
-  animation: fadeInUp 0.8s ease-out;
-  position: relative;
-  z-index: 1;
 }
 
 .profile-form {
@@ -389,31 +385,31 @@ watch(
 
 .blue-input :deep(.el-input__wrapper) {
   border-radius: 10px;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+  background: #F8FAFC;
+  box-shadow: none;
   transition: all 0.3s ease;
-  border: 1px solid rgba(64, 158, 255, 0.2);
+  border: 1px solid #F0F4F8;
 }
 
 .blue-input :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.3);
-  border-color: #409EFF;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  border-color: #3B82F6;
 }
 
 .blue-input :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.2);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
 .blue-number :deep(.el-input-number__decrease),
 .blue-number :deep(.el-input-number__increase) {
-  background: linear-gradient(135deg, #409EFF 0%, #66b1ff 100%);
+  background: #3B82F6;
   color: white;
   border: none;
 }
 
 .blue-number :deep(.el-input-number__decrease:hover),
 .blue-number :deep(.el-input-number__increase:hover) {
-  background: linear-gradient(135deg, #66b1ff 0%, #85ce61 100%);
+  background: #2563EB;
 }
 
 .save-button {
@@ -421,35 +417,55 @@ watch(
   height: 45px;
   font-size: 16px;
   font-weight: 600;
-  background: linear-gradient(135deg, #409EFF 0%, #66b1ff 100%);
+  background: #3B82F6;
   border: none;
   border-radius: 12px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .save-button:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.6);
-  background: linear-gradient(135deg, #66b1ff 0%, #85ce61 100%);
+  background: #2563EB;
 }
 
 .save-button:active {
   transform: translateY(-1px);
 }
 
+.password-button {
+  width: 100%;
+  height: 45px;
+  font-size: 16px;
+  font-weight: 600;
+  background: #f5f7fa;
+  color: #909399;
+  border: 1px solid #d3d4d6;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.password-button:hover,
+.password-button:focus {
+  background: #e9e9eb;
+  color: #606266;
+  border-color: #b1b3b8;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(144, 147, 153, 0.25);
+}
+
 .stats-row {
   display: flex;
   justify-content: space-around;
   padding: 20px;
-  margin-top: 10px;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  background: #F8FAFC;
   border-radius: 12px;
   margin: 10px 20px 20px;
-  border: 1px solid rgba(64, 158, 255, 0.2);
+  border: 1px solid #F0F4F8;
 }
 
 .stat-item {
@@ -484,12 +500,7 @@ watch(
 .stat-value {
   font-size: 20px;
   font-weight: 700;
-  color: #409EFF;
-  transition: all 0.3s ease;
-}
-
-.stat-item:hover .stat-value {
-  transform: scale(1.2);
+  color: #3B82F6;
 }
 
 :deep(.el-form-item__label) {

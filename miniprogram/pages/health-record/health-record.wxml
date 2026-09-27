@@ -1,0 +1,121 @@
+<view class="page">
+  <!-- 顶部操作栏 -->
+  <view class="toolbar">
+    <text class="toolbar-title">身体数据</text>
+    <button class="btn-add-record" bindtap="openForm">+ 记录</button>
+  </view>
+
+  <!-- 最新数据概览 -->
+  <view class="overview-grid" wx:if="{{latestRecord}}">
+    <view class="overview-item card">
+      <text class="overview-label">血压</text>
+      <text class="overview-value">{{latestRecord.bloodPressureSystolic || '--'}}/{{latestRecord.bloodPressureDiastolic || '--'}}</text>
+      <text class="overview-unit">mmHg</text>
+    </view>
+    <view class="overview-item card">
+      <text class="overview-label">心率</text>
+      <text class="overview-value">{{latestRecord.heartRate || '--'}}</text>
+      <text class="overview-unit">bpm</text>
+    </view>
+    <view class="overview-item card">
+      <text class="overview-label">血糖</text>
+      <text class="overview-value">{{latestRecord.bloodSugar || '--'}}</text>
+      <text class="overview-unit">mmol/L</text>
+    </view>
+    <view class="overview-item card">
+      <text class="overview-label">体重</text>
+      <text class="overview-value">{{latestRecord.weight || '--'}}</text>
+      <text class="overview-unit">kg</text>
+    </view>
+  </view>
+
+  <!-- 记录列表 -->
+  <view class="section-header">
+    <text class="section-title">历史记录</text>
+  </view>
+
+  <view wx:if="{{records.length === 0}}" class="empty-state">
+    <text class="empty-icon">📋</text>
+    <text class="empty-text">暂无身体数据记录</text>
+    <text class="empty-tip">点击上方"记录"按钮添加</text>
+  </view>
+
+  <view wx:else class="record-list">
+    <view wx:for="{{records}}" wx:key="id" class="record-card card">
+      <view class="record-head">
+        <text class="record-date">{{item.recordDate}}</text>
+        <view class="record-actions">
+          <text class="action-edit" bindtap="editRecord" data-id="{{item.id}}">编辑</text>
+          <text class="action-delete" bindtap="deleteRecord" data-id="{{item.id}}">删除</text>
+        </view>
+      </view>
+      <view class="record-body">
+        <view class="record-row">
+          <text class="record-label">血压</text>
+          <text class="record-value">{{item.bloodPressureSystolic || '--'}}/{{item.bloodPressureDiastolic || '--'}} mmHg</text>
+        </view>
+        <view class="record-row">
+          <text class="record-label">心率</text>
+          <text class="record-value">{{item.heartRate || '--'}} bpm</text>
+        </view>
+        <view class="record-row">
+          <text class="record-label">血糖</text>
+          <text class="record-value">{{item.bloodSugar || '--'}} mmol/L</text>
+        </view>
+        <view class="record-row">
+          <text class="record-label">体重</text>
+          <text class="record-value">{{item.weight || '--'}} kg</text>
+        </view>
+        <view wx:if="{{item.notes}}" class="record-notes">
+          <text class="record-notes-text">{{item.notes}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 新增/编辑弹窗 -->
+  <view class="modal-mask" wx:if="{{showForm}}" bindtap="closeForm">
+    <view class="modal-content" catchtap="">
+      <text class="modal-title">{{editingId ? '编辑记录' : '记录身体数据'}}</text>
+
+      <view class="form-item">
+        <text class="form-label">日期</text>
+        <picker mode="date" value="{{form.recordDate}}" bindchange="onDateChange">
+          <view class="form-picker">{{form.recordDate || '请选择日期'}}</view>
+        </picker>
+      </view>
+
+      <view class="form-item">
+        <text class="form-label">收缩压 (mmHg)</text>
+        <input type="digit" class="form-input" placeholder="如 120" value="{{form.bloodPressureSystolic}}" bindinput="onInput" data-field="bloodPressureSystolic" />
+      </view>
+
+      <view class="form-item">
+        <text class="form-label">舒张压 (mmHg)</text>
+        <input type="digit" class="form-input" placeholder="如 80" value="{{form.bloodPressureDiastolic}}" bindinput="onInput" data-field="bloodPressureDiastolic" />
+      </view>
+
+      <view class="form-item">
+        <text class="form-label">心率 (bpm)</text>
+        <input type="digit" class="form-input" placeholder="如 72" value="{{form.heartRate}}" bindinput="onInput" data-field="heartRate" />
+      </view>
+
+      <view class="form-item">
+        <text class="form-label">血糖 (mmol/L)</text>
+        <input type="digit" class="form-input" placeholder="如 5.6" value="{{form.bloodSugar}}" bindinput="onInput" data-field="bloodSugar" />
+      </view>
+
+      <view class="form-item">
+        <text class="form-label">体重 (kg)</text>
+        <input type="digit" class="form-input" placeholder="如 65.5" value="{{form.weight}}" bindinput="onInput" data-field="weight" />
+      </view>
+
+      <view class="form-item">
+        <text class="form-label">备注（选填）</text>
+        <textarea class="form-textarea" placeholder="记录一下..." maxlength="500" value="{{form.notes}}" bindinput="onInput" data-field="notes" />
+      </view>
+
+      <button class="btn-primary" bindtap="submitForm" loading="{{saving}}">保存</button>
+    </view>
+  </view>
+</view>

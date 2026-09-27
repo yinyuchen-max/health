@@ -74,6 +74,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'change-password',
+        name: 'ChangePassword',
+        component: () => import('../views/ChangePassword.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'reminder',
         name: 'Reminder',
         component: () => import('../views/ReminderConfig.vue'),

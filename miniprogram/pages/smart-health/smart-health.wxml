@@ -1,0 +1,69 @@
+<view class="page">
+  <!-- 总体状态 -->
+  <view class="status-card card" wx:if="{{overview.overallStatus}}">
+    <view class="status-header">
+      <text class="status-title">总体健康状态</text>
+      <text class="status-badge status-{{overview.overallStatus}}">{{overview.overallStatus}}</text>
+    </view>
+    <view class="status-time" wx:if="{{overview.generatedAt}}">
+      <text>分析时间：{{overview.generatedAt}}</text>
+    </view>
+  </view>
+
+  <!-- BMI -->
+  <view class="bmi-card card" wx:if="{{overview.bmi}}">
+    <text class="section-title">BMI 指数</text>
+    <view class="bmi-value">{{overview.bmi}}</view>
+  </view>
+
+  <!-- 风险评估 -->
+  <view class="risk-section card" wx:if="{{riskList.length > 0}}">
+    <text class="section-title">风险评估</text>
+    <view class="risk-item" wx:for="{{riskList}}" wx:key="riskType">
+      <view class="risk-header">
+        <text class="risk-name">{{riskLabels[item.riskType] || item.riskType}}</text>
+        <text class="risk-score">风险分：{{item.riskScore}}</text>
+      </view>
+      <view class="risk-level level-{{item.riskLevel}}">
+        <text>{{item.riskLevel === 'low' ? '低风险' : item.riskLevel === 'medium' ? '中风险' : '高风险'}}</text>
+      </view>
+      <view class="risk-desc" wx:if="{{item.description}}">
+        <text>{{item.description}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 快速建议 -->
+  <view class="tips-section card" wx:if="{{overview.quickTips.length > 0}}">
+    <text class="section-title">快速建议</text>
+    <view class="tip-item" wx:for="{{overview.quickTips}}" wx:key="*this">
+      <text class="tip-dot">•</text>
+      <text>{{item}}</text>
+    </view>
+  </view>
+
+  <!-- 营养建议 -->
+  <view class="advice-section card" wx:if="{{overview.nutritionAdvice}}">
+    <text class="section-title">营养建议</text>
+    <view class="advice-content">
+      <text>{{overview.nutritionAdvice.summary || '暂无'}}</text>
+    </view>
+  </view>
+
+  <!-- 运动计划 -->
+  <view class="advice-section card" wx:if="{{overview.exercisePlan}}">
+    <text class="section-title">运动建议</text>
+    <view class="advice-content">
+      <text>{{overview.exercisePlan.summary || '暂无'}}</text>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-tip" wx:if="{{!overview.overallStatus && !loading}}">
+    <text>暂无智能分析数据</text>
+    <text class="empty-sub">请先添加健康记录和运动记录</text>
+  </view>
+
+  <!-- 刷新按钮 -->
+  <button class="btn-refresh" bindtap="loadData" loading="{{loading}}">刷新分析</button>
+</view>

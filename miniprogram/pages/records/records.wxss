@@ -1,0 +1,165 @@
+.page {
+  padding: 24rpx;
+  padding-bottom: 180rpx;
+  background: #f5f3ff;
+  min-height: 100vh;
+}
+
+/* 月份日历 */
+.month-bar {
+  padding: 24rpx;
+}
+
+.month-text {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #1f2937;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.week-row {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 12rpx;
+}
+
+.week-day {
+  font-size: 24rpx;
+  color: #9ca3af;
+  width: 60rpx;
+  text-align: center;
+}
+
+.day-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+}
+
+.day-item {
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 26rpx;
+  color: #4b5563;
+  margin: 4rpx;
+}
+
+.day-today {
+  color: #7c3aed;
+  font-weight: bold;
+}
+
+.day-selected {
+  background: #7c3aed;
+  color: #fff;
+}
+
+/* 区域标题 */
+.section-header {
+  margin: 24rpx 0 16rpx;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #1f2937;
+}
+
+/* 记录卡片 */
+.record-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx;
+  margin-bottom: 16rpx;
+  border-radius: 20rpx;
+  background: #fff;
+  box-shadow: 0 2rpx 12rpx rgba(139, 92, 246, 0.06);
+}
+
+.record-card-left {
+  flex: 1;
+}
+
+.record-card-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1f2937;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.record-card-sub {
+  font-size: 24rpx;
+  color: #6b7280;
+  display: block;
+  margin-bottom: 4rpx;
+}
+
+.record-card-cal {
+  color: #7c3aed;
+  font-weight: 500;
+}
+
+.record-card-emoji {
+  font-size: 56rpx;
+  margin-left: 16rpx;
+}
+
+/* 悬浮按钮 */
+.fab-btn {
+  position: fixed;
+  right: 40rpx;
+  bottom: 180rpx;
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 24rpx rgba(124, 58, 237, 0.4);
+  z-index: 100;
+}
+
+.fab-icon {
+  font-size: 48rpx;
+  color: #fff;
+  font-weight: 300;
+}
+
+/* 添加菜单 */
+.add-menu {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 40rpx 32rpx;
+  padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: space-around;
+  z-index: 1001;
+}
+
+.add-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.add-menu-emoji {
+  font-size: 48rpx;
+}
+
+.add-menu-text {
+  font-size: 24rpx;
+  color: #4b5563;
+}

@@ -1,0 +1,48 @@
+<view class="page">
+  <!-- 医生信息 -->
+  <view class="doctor-info-card card">
+    <view class="doctor-header">
+      <view class="doctor-avatar">{{doctorName[0]}}</view>
+      <view class="doctor-detail">
+        <text class="doctor-name">{{doctorName}}</text>
+        <text class="doctor-dept">{{department}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 预约表单 -->
+  <view class="form-card card">
+    <text class="form-title">填写预约信息</text>
+
+    <view class="form-group">
+      <text class="form-label">患者姓名</text>
+      <input class="form-input" placeholder="请输入姓名" value="{{form.patientName}}" bindinput="onInput" data-field="patientName" />
+    </view>
+
+    <view class="form-group">
+      <text class="form-label">年龄</text>
+      <input class="form-input" type="number" placeholder="请输入年龄" value="{{form.age}}" bindinput="onInput" data-field="age" />
+    </view>
+
+    <view class="form-group">
+      <text class="form-label">联系电话</text>
+      <input class="form-input" type="number" placeholder="请输入手机号" value="{{form.phone}}" bindinput="onInput" data-field="phone" />
+    </view>
+
+    <view class="form-group">
+      <text class="form-label">预约时间</text>
+      <picker mode="date" bindchange="onDateChange" value="{{form.date}}">
+        <view class="picker-value">{{form.date || '请选择日期'}}</view>
+      </picker>
+    </view>
+
+    <view class="form-group">
+      <text class="form-label">预约时段</text>
+      <picker bindchange="onTimeChange" value="{{timeIndex}}" range="{{timeOptions}}">
+        <view class="picker-value">{{timeOptions[timeIndex] || '请选择时段'}}</view>
+      </picker>
+    </view>
+
+    <button class="btn-submit" bindtap="submitAppointment" loading="{{submitting}}">确认预约</button>
+  </view>
+</view>

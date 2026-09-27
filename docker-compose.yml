@@ -11,12 +11,13 @@ services:
       - "127.0.0.1:3308:3306"
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./backend/database/health_system.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      # 数据库 schema 不再通过 initdb.d 初始化，改由后端启动时 Flyway 自动迁移
+      # （backend/src/main/resources/db/migration/V1-V5）
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p123456"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD"]
       interval: 2s
       timeout: 2s
       retries: 30

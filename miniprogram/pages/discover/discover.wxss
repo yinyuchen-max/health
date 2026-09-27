@@ -1,0 +1,107 @@
+.page {
+  padding: 24rpx;
+  padding-bottom: 140rpx;
+  background: #f5f3ff;
+  min-height: 100vh;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 24rpx 0 16rpx;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #1f2937;
+}
+
+.section-more {
+  font-size: 24rpx;
+  color: #7c3aed;
+}
+
+/* 文章列表 */
+.article-card {
+  display: flex;
+  align-items: center;
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+  border-radius: 20rpx;
+  background: #fff;
+  box-shadow: 0 2rpx 12rpx rgba(139, 92, 246, 0.06);
+}
+
+.article-info {
+  flex: 1;
+}
+
+.article-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1f2937;
+  display: block;
+  margin-bottom: 8rpx;
+  line-height: 1.4;
+}
+
+.article-meta {
+  font-size: 22rpx;
+  color: #9ca3af;
+}
+
+.article-thumb {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 16rpx;
+  background: #f5f3ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 16rpx;
+}
+
+.article-thumb-emoji {
+  font-size: 48rpx;
+}
+
+/* 工具网格 */
+.tools-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.tool-item {
+  width: calc(25% - 12rpx);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tool-icon {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10rpx;
+}
+
+.tool-icon-bmi { background: linear-gradient(135deg, #ede9fe, #ddd6fe); }
+.tool-icon-cal { background: linear-gradient(135deg, #fef3c7, #fde68a); }
+.tool-icon-water { background: linear-gradient(135deg, #dbeafe, #bfdbfe); }
+.tool-icon-more { background: linear-gradient(135deg, #d1fae5, #a7f3d0); }
+
+.tool-emoji {
+  font-size: 40rpx;
+}
+
+.tool-name {
+  font-size: 22rpx;
+  color: #4b5563;
+  text-align: center;
+}

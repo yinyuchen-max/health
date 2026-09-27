@@ -58,41 +58,36 @@ public class SecurityUtil {
     }
 
     /**
-     * 校验当前用户是否为管理员
+     * 校验当前用户是否为管理员。
+     * <p>
+     * 角色以数据库实时数据为准，而非 JWT 内的 role claim：
+     * getCurrentUser() 会查库并拦截已删除/已禁用账号，
+     * 确保管理员被降权或禁用后，其未过期的旧 Token 立即失效。
+     * </p>
      */
     public void requireAdmin() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) {
-            throw new UnauthorizedException("请先登录");
-        }
-        boolean isAdmin = auth.getAuthorities().stream()
-                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
-        if (!isAdmin) {
+        User user = getCurrentUser();
+        if (!"admin".equals(user.getRole())) {
             throw new ForbiddenException("权限不足，仅管理员可操作");
         }
     }
 
     /**
      * 校验当前用户是否有权操作指定userId的数据
-     * 管理员可以操作所有数据，普通用户只能操作自己的数据
+     * 管理员可以操作所有数据，普通用户只能操作自己的数据。
+     * 管理员身份同样以数据库实时角色为准（防止被降权后的旧 Token 继续生效）。
      */
     public void requireOwnerOrAdmin(Long targetUserId) {
         if (targetUserId == null) {
             throw new ForbiddenException("目标用户ID不能为空");
         }
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) {
-            throw new UnauthorizedException("请先登录");
-        }
+        User user = getCurrentUser();
         // 管理员可以操作所有数据
-        boolean isAdmin = auth.getAuthorities().stream()
-                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
-        if (isAdmin) {
+        if ("admin".equals(user.getRole())) {
             return;
         }
         // 普通用户只能操作自己的数据
-        Long currentUserId = getCurrentUserId();
-        if (!currentUserId.equals(targetUserId)) {
+        if (!user.getId().equals(targetUserId)) {
             throw new ForbiddenException("无权操作他人的数据");
         }
     }

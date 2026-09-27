@@ -2,7 +2,9 @@ package com.health.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.health.domain.dto.DoctorFullRegisterDTO;
 import com.health.domain.dto.DoctorRegisterDTO;
+import com.health.domain.dto.UserRegisterDTO;
 import com.health.domain.entity.Doctor;
 import com.health.domain.entity.DoctorAppointment;
 import com.health.domain.entity.User;
@@ -11,6 +13,7 @@ import com.health.mapper.DoctorMapper;
 import com.health.mapper.UserMapper;
 import com.health.service.DoctorAppointmentService;
 import com.health.service.DoctorService;
+import com.health.service.UserService;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +23,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -34,15 +38,42 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor>
     private final UserMapper userMapper;
     private final JavaMailSender mailSender;
     private final DoctorAppointmentService doctorAppointmentService;
+    private final UserService userService;
 
     @Value("${spring.mail.username:}")
     private String fromEmail;
 
     public DoctorServiceImpl(UserMapper userMapper, JavaMailSender mailSender,
-                             DoctorAppointmentService doctorAppointmentService) {
+                             DoctorAppointmentService doctorAppointmentService,
+                             UserService userService) {
         this.userMapper = userMapper;
         this.mailSender = mailSender;
         this.doctorAppointmentService = doctorAppointmentService;
+        this.userService = userService;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DoctorVO fullRegister(DoctorFullRegisterDTO dto) {
+        // 1. 创建用户账号：register 直接返回新用户 ID（自增主键回填），
+        //    不再"注册后按 username 反查"，消除并发同名请求的竞态
+        UserRegisterDTO userDto = new UserRegisterDTO();
+        userDto.setUsername(dto.getUsername());
+        userDto.setPassword(dto.getPassword());
+        userDto.setEmail(dto.getEmail());
+        userDto.setPhone(dto.getPhone());
+        Long userId = userService.register(userDto);
+
+        // 2. 创建医生申请：与建号同一事务，失败整体回滚，不留孤儿账号
+        DoctorRegisterDTO doctorDto = new DoctorRegisterDTO();
+        doctorDto.setRealName(dto.getRealName());
+        doctorDto.setHospital(dto.getHospital());
+        doctorDto.setDepartment(dto.getDepartment());
+        doctorDto.setTitle(dto.getTitle());
+        doctorDto.setSpecialization(dto.getSpecialization());
+        doctorDto.setLicenseNumber(dto.getLicenseNumber());
+        doctorDto.setIntroduction(dto.getIntroduction());
+        return registerAsDoctor(userId, doctorDto);
     }
 
     @Override

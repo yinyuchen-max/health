@@ -1,0 +1,110 @@
+/* ========== 全局移动端响应式适配 ========== */
+
+/* --- 表格在小屏幕下允许横向滚动 --- */
+@media (max-width: 768px) {
+  .el-table {
+    font-size: 13px;
+  }
+
+  .el-table .cell {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  /* 对话框适配 */
+  .el-dialog {
+    --el-dialog-width: 92% !important;
+    width: 92% !important;
+    margin: 8vh auto !important;
+    border-radius: 16px;
+  }
+
+  .el-dialog .el-dialog__body {
+    padding: 16px 16px;
+  }
+
+  /* 分页器简化 */
+  .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .el-pagination .el-pagination__jump {
+    display: none;
+  }
+
+  .el-pagination .el-pagination__sizes {
+    display: none;
+  }
+
+  /* 卡片间距缩小 */
+  .el-card {
+    border-radius: 12px;
+  }
+
+  .el-card__body {
+    padding: 14px;
+  }
+
+  /* 表单元素适配 */
+  .el-form-item {
+    margin-bottom: 16px;
+  }
+
+  /* 输入框自适应宽度 */
+  .el-input,
+  .el-select,
+  .el-date-editor {
+    max-width: 100%;
+  }
+
+  /* 按钮组间距 */
+  .el-button + .el-button {
+    margin-left: 8px;
+  }
+
+  /* 空状态适配 */
+  .el-empty {
+    padding: 20px 0;
+  }
+
+  /* 消息提示适配 */
+  .el-message {
+    min-width: auto;
+    max-width: calc(100vw - 32px);
+  }
+}
+
+/* --- 超小屏幕（<480px）额外调整 --- */
+@media (max-width: 480px) {
+  .el-dialog {
+    --el-dialog-width: 96% !important;
+    width: 96% !important;
+    margin: 4vh auto !important;
+  }
+
+  .el-card__body {
+    padding: 12px;
+  }
+
+  .el-table {
+    font-size: 12px;
+  }
+
+  /* 表格操作列按钮紧凑 */
+  .el-table .el-button {
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+
+  .el-table .el-button + .el-button {
+    margin-left: 4px;
+  }
+}
+
+/* --- 平板适配（768px - 1024px） --- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .el-card__body {
+    padding: 16px;
+  }
+}

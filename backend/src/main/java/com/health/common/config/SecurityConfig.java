@@ -73,10 +73,10 @@ public class SecurityConfig implements WebMvcConfigurer {
                 // 若走 /api/** 的 authenticated 规则会抛 AccessDeniedException。
                 // 初始 REQUEST 已完成认证授权，放行 ASYNC 分发是安全的。
                 .requestMatchers(new DispatcherTypeRequestMatcher(DispatcherType.ASYNC)).permitAll()
-                // 公开接口：登录、注册、医生列表、医生注册
-                .requestMatchers("/api/user/login", "/api/user/register", "/api/doctor/list", "/api/doctor/full-register").permitAll()
-                // 管理员接口：需要 ADMIN 角色
-                .requestMatchers("/api/user/admin/**").hasRole("ADMIN")
+                // 公开接口：登录、注册、微信登录、医生列表、医生注册
+                .requestMatchers("/api/user/login", "/api/user/register", "/api/user/wechat-login", "/api/doctor/list", "/api/doctor/full-register").permitAll()
+                // 管理员接口：需要 ADMIN 角色（URL 层第一道防线，方法内 requireAdmin 查库二次校验）
+                .requestMatchers("/api/user/admin/**", "/api/doctor/admin/**").hasRole("ADMIN")
                 // 其他所有 /api/** 接口需要认证
                 .requestMatchers("/api/**").authenticated()
                 // 静态资源和前端页面

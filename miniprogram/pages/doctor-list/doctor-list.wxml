@@ -1,0 +1,47 @@
+<view class="page">
+  <!-- 科室筛选 -->
+  <scroll-view class="dept-scroll" scroll-x>
+    <view class="dept-list">
+      <view class="dept-item {{currentDept === '' ? 'active' : ''}}" bindtap="filterDept" data-dept="">全部</view>
+      <view class="dept-item {{currentDept === item ? 'active' : ''}}" wx:for="{{deptList}}" wx:key="*this" bindtap="filterDept" data-dept="{{item}}">{{item}}</view>
+    </view>
+  </scroll-view>
+
+  <!-- 医生列表 -->
+  <view class="doctor-list">
+    <view class="doctor-card card" wx:for="{{doctors}}" wx:key="id">
+      <view class="doctor-header">
+        <view class="doctor-avatar">{{item.realName[0]}}</view>
+        <view class="doctor-info">
+          <text class="doctor-name">{{item.realName}}</text>
+          <text class="doctor-title">{{item.title || '医生'}}</text>
+        </view>
+      </view>
+
+      <view class="doctor-detail">
+        <view class="detail-row">
+          <text class="detail-label">医院</text>
+          <text class="detail-value">{{item.hospital}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">科室</text>
+          <text class="detail-value">{{item.department}}</text>
+        </view>
+        <view class="detail-row" wx:if="{{item.specialization}}">
+          <text class="detail-label">擅长</text>
+          <text class="detail-value">{{item.specialization}}</text>
+        </view>
+      </view>
+
+      <view class="doctor-intro" wx:if="{{item.introduction}}">
+        <text>{{item.introduction}}</text>
+      </view>
+
+      <button class="btn-appointment" bindtap="goAppointment" data-doctor="{{item}}">预约问诊</button>
+    </view>
+
+    <view class="empty-tip" wx:if="{{doctors.length === 0 && !loading}}">
+      <text>暂无医生信息</text>
+    </view>
+  </view>
+</view>

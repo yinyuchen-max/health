@@ -276,7 +276,7 @@ const goToLogin = () => {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: linear-gradient(180deg, #edf1f6 0%, #e7ecf3 100%);
+  background: linear-gradient(180deg, #EBF5FF 0%, #E8F0FE 100%);
 }
 
 .register-shell {

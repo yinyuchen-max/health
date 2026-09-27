@@ -1,0 +1,146 @@
+<view class="page">
+  <!-- 顶部问候区 -->
+  <view class="header-card">
+    <view class="header-left">
+      <text class="header-title">健康生活</text>
+      <text class="header-subtitle">每一天，遇见更好的自己</text>
+    </view>
+    <view class="header-avatar">
+      <text class="avatar-emoji">🧘</text>
+    </view>
+  </view>
+
+  <!-- 今日状态 -->
+  <view class="status-card card">
+    <view class="status-row">
+      <text class="status-label">今日状态</text>
+      <text class="status-edit" bindtap="goProfile">编辑</text>
+    </view>
+    <view class="status-content">
+      <text class="status-emoji">😊</text>
+      <view class="status-text-wrap">
+        <text class="status-mood">很棒哦！</text>
+        <text class="status-tip">继续坚持，目标在向你招手</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 快捷操作 -->
+  <view class="quick-actions">
+    <view class="action-item" bindtap="goSmartHealth">
+      <view class="action-icon-wrap action-icon-health">
+        <text class="action-emoji"></text>
+      </view>
+      <text class="action-name">健康评估</text>
+    </view>
+    <view class="action-item" bindtap="goDietRecord">
+      <view class="action-icon-wrap action-icon-diet">
+        <text class="action-emoji"></text>
+      </view>
+      <text class="action-name">饮食记录</text>
+    </view>
+    <view class="action-item" bindtap="goSportRecord">
+      <view class="action-icon-wrap action-icon-sport">
+        <text class="action-emoji">🏃</text>
+      </view>
+      <text class="action-name">运动记录</text>
+    </view>
+    <view class="action-item" bindtap="goSleepRecord">
+      <view class="action-icon-wrap action-icon-sleep">
+        <text class="action-emoji">😴</text>
+      </view>
+      <text class="action-name">睡眠管理</text>
+    </view>
+  </view>
+
+  <!-- 今日数据 -->
+  <view class="data-section">
+    <view class="section-header">
+      <text class="section-title">今日数据</text>
+      <text class="section-more" bindtap="goRecords">编辑</text>
+    </view>
+    <view class="data-grid">
+      <!-- 步数 -->
+      <view class="data-card card">
+        <view class="data-icon-wrap">
+          <text class="data-emoji">👟</text>
+        </view>
+        <text class="data-label">步数</text>
+        <text class="data-value">{{todaySteps || '--'}}</text>
+        <text class="data-unit">/ 10,000步</text>
+        <view class="progress-bar">
+          <view class="progress-bar-inner" style="width: {{stepsPercent}}%"></view>
+        </view>
+      </view>
+      <!-- 热量 -->
+      <view class="data-card card">
+        <view class="data-icon-wrap">
+          <text class="data-emoji"></text>
+        </view>
+        <text class="data-label">热量</text>
+        <text class="data-value">{{todayCalories || '--'}}</text>
+        <text class="data-unit">/ 600千卡</text>
+        <view class="progress-bar">
+          <view class="progress-bar-inner" style="width: {{caloriesPercent}}%"></view>
+        </view>
+      </view>
+      <!-- 运动 -->
+      <view class="data-card card">
+        <view class="data-icon-wrap">
+          <text class="data-emoji">⚡</text>
+        </view>
+        <text class="data-label">运动</text>
+        <text class="data-value">{{todaySportMinutes || 0}}</text>
+        <text class="data-unit">/ 60分</text>
+        <view class="progress-bar">
+          <view class="progress-bar-inner" style="width: {{sportPercent}}%"></view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 健康小贴士 -->
+  <view class="card">
+    <view class="section-header">
+      <text class="section-title">健康小贴士</text>
+    </view>
+    <view class="tip-card">
+      <text class="tip-title">多喝水有助于新陈代谢</text>
+      <text class="tip-desc">每天至少喝8杯水，保持身体水分平衡</text>
+      <text class="tip-emoji">💧</text>
+    </view>
+  </view>
+
+  <!-- 更多功能 -->
+  <view class="card">
+    <view class="section-header">
+      <text class="section-title">更多功能</text>
+    </view>
+    <view class="more-grid">
+      <view class="more-item" bindtap="goAiChat">
+        <text class="more-emoji">🤖</text>
+        <text class="more-name">AI 问诊</text>
+      </view>
+      <view class="more-item" bindtap="goBmiCalculator">
+        <text class="more-emoji">⚖️</text>
+        <text class="more-name">BMI计算</text>
+      </view>
+      <view class="more-item" bindtap="goGoalSetting">
+        <text class="more-emoji">🎯</text>
+        <text class="more-name">设置目标</text>
+      </view>
+      <view class="more-item" bindtap="goReminder">
+        <text class="more-emoji">⏰</text>
+        <text class="more-name">提醒配置</text>
+      </view>
+      <view class="more-item" bindtap="goDoctorList">
+        <text class="more-emoji">👨‍️</text>
+        <text class="more-name">医生预约</text>
+      </view>
+      <view class="more-item" bindtap="goHealthRecord">
+        <text class="more-emoji">📋</text>
+        <text class="more-name">健康记录</text>
+      </view>
+    </view>
+  </view>
+</view>

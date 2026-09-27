@@ -180,7 +180,7 @@ import {
   VideoPause
 } from '@element-plus/icons-vue'
 import request from '../utils/request'
-import { marked } from 'marked'
+import { renderMarkdown } from '../utils/markdown'
 import { useUserStore } from '../store/user'
 import { ElMessageBox, ElMessage } from 'element-plus'
 
@@ -287,15 +287,6 @@ const scheduleScroll = () => {
     rafPending = false
     scrollToBottom()
   })
-}
-
-const renderMarkdown = (content) => {
-  if (!content) return ''
-  marked.setOptions({
-    breaks: false, // 不把每个换行都转 <br>，让段落自然排版
-    gfm: true
-  })
-  return marked(content)
 }
 
 const copyMessage = async (msg) => {
@@ -509,9 +500,9 @@ watch(() => userStore.userInfo?.id, () => {
   gap: 12px;
   height: calc(100vh - 132px);
   background:
-    radial-gradient(1100px 480px at 18% -12%, rgba(99, 102, 241, 0.07), transparent 60%),
-    radial-gradient(900px 420px at 92% 112%, rgba(37, 99, 235, 0.07), transparent 60%),
-    #f4f7fb;
+    radial-gradient(1100px 480px at 18% -12%, rgba(59, 130, 246, 0.06), transparent 60%),
+    radial-gradient(900px 420px at 92% 112%, rgba(16, 185, 129, 0.06), transparent 60%),
+    #EBF5FF;
   border-radius: 16px;
   overflow: hidden;
 }
@@ -523,9 +514,8 @@ watch(() => userStore.userInfo?.id, () => {
   align-items: center;
   gap: 16px;
   padding: 14px 22px 12px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid #e8eef6;
+  background: #fff;
+  border-bottom: 1px solid #F0F4F8;
   flex-shrink: 0;
 }
 
@@ -544,8 +534,8 @@ watch(() => userStore.userInfo?.id, () => {
   align-items: center;
   justify-content: center;
   color: #fff;
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
-  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.35);
+  background: #3B82F6;
+  box-shadow: 0 6px 14px rgba(59, 130, 246, 0.3);
   flex-shrink: 0;
 }
 
@@ -626,10 +616,10 @@ watch(() => userStore.userInfo?.id, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #e0ecff, #ede9fe);
+  background: #EBF5FF;
   box-shadow:
-    0 10px 30px rgba(79, 70, 229, 0.18),
-    0 0 0 10px rgba(79, 70, 229, 0.04);
+    0 10px 30px rgba(59, 130, 246, 0.12),
+    0 0 0 10px rgba(59, 130, 246, 0.04);
   animation: orb-float 4s ease-in-out infinite;
 }
 
@@ -862,11 +852,11 @@ watch(() => userStore.userInfo?.id, () => {
 }
 
 .user-bubble {
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  background: #3B82F6;
   color: #fff;
   border-bottom-right-radius: 6px;
   white-space: pre-wrap;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
 /* 流式光标 */

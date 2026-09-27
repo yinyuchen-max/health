@@ -1,6 +1,7 @@
 package com.health.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import com.health.domain.dto.DoctorFullRegisterDTO;
 import com.health.domain.dto.DoctorRegisterDTO;
 import com.health.domain.entity.Doctor;
 import com.health.domain.vo.DoctorVO;
@@ -8,6 +9,12 @@ import com.health.domain.vo.DoctorVO;
 import java.util.List;
 
 public interface DoctorService extends IService<Doctor> {
+
+    /**
+     * 医生完整注册（无需登录）：创建用户账号 + 提交医生申请。
+     * 两步写操作在同一事务内，任一步失败整体回滚，不会留下无申请的孤儿账号。
+     */
+    DoctorVO fullRegister(DoctorFullRegisterDTO dto);
 
     /**
      * 注册成为医生（需已登录）

@@ -102,7 +102,7 @@ public class ReminderScheduler {
             return;
         }
 
-        // Redis 去重
+        // Redis 去重（先占位，防止多实例/多次扫描重复投递）
         String deduplicateKey = SENT_KEY_PREFIX + pref.getId() + ":" + today;
         Boolean isNew = redisTemplate.opsForValue().setIfAbsent(deduplicateKey, "1", 25, TimeUnit.HOURS);
         if (Boolean.FALSE.equals(isNew)) {
@@ -110,46 +110,70 @@ public class ReminderScheduler {
             return;
         }
 
-        // 查询用户信息
-        User user = userMapper.selectById(pref.getUserId());
-        if (user == null || user.getStatus() == 0) {
-            log.warn("用户不存在或已禁用，跳过: userId={}", pref.getUserId());
-            redisTemplate.delete(deduplicateKey);
-            return;
+        Long notificationId = null;
+        boolean delivered = false;
+        try {
+            // 查询用户信息
+            User user = userMapper.selectById(pref.getUserId());
+            if (user == null || user.getStatus() == 0) {
+                log.warn("用户不存在或已禁用，跳过: userId={}", pref.getUserId());
+                return;
+            }
+
+            // 记录通知到数据库
+            ReminderNotification notification = new ReminderNotification();
+            notification.setUserId(user.getId());
+            notification.setPreferenceId(pref.getId());
+            notification.setType(pref.getType());
+            notification.setScheduledTime(LocalDateTime.now());
+            notification.setActualTime(LocalDateTime.now());
+            notification.setCompleted(false);
+            notification.setReadStatus(false);
+            notification.setCreatedAt(LocalDateTime.now());
+            notification.setUpdatedAt(LocalDateTime.now());
+            notification.setDeleted(0);
+            notificationMapper.insert(notification);
+            notificationId = notification.getId();
+
+            // ★ 发送消息到 RabbitMQ（由消费者异步处理邮件）
+            ReminderMessage message = new ReminderMessage(
+                    user.getId(),
+                    pref.getId(),
+                    pref.getType(),
+                    currentTime
+            );
+
+            // 使用 Topic 交换机，按类型路由（未来可针对不同类型单独消费）
+            String routingKey = RabbitMQConfig.REMINDER_EMAIL_ROUTING_KEY + "." + pref.getType();
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.REMINDER_EXCHANGE,
+                    routingKey,
+                    message
+            );
+            delivered = true;
+
+            log.info("提醒消息已投递MQ: userId={}, type={}, routingKey={}, preferenceId={}",
+                    user.getId(), pref.getType(), routingKey, pref.getId());
+        } finally {
+            if (!delivered) {
+                // 补偿：用户无效 / 通知落库失败 / MQ 投递失败时，
+                // 回滚已写入的通知记录并释放去重 key。
+                // 否则 dedup key 被占用 25 小时，而调度按 HH:mm 精确匹配当天不会再扫到，
+                // 该提醒当天将永久丢失且无法重试。
+                if (notificationId != null) {
+                    try {
+                        notificationMapper.deleteById(notificationId);
+                    } catch (Exception ex) {
+                        log.error("补偿删除通知记录失败: notificationId={}", notificationId, ex);
+                    }
+                }
+                try {
+                    redisTemplate.delete(deduplicateKey);
+                } catch (Exception ex) {
+                    log.error("补偿释放去重key失败: key={}", deduplicateKey, ex);
+                }
+            }
         }
-
-        // 记录通知到数据库
-        ReminderNotification notification = new ReminderNotification();
-        notification.setUserId(user.getId());
-        notification.setPreferenceId(pref.getId());
-        notification.setType(pref.getType());
-        notification.setScheduledTime(LocalDateTime.now());
-        notification.setActualTime(LocalDateTime.now());
-        notification.setCompleted(false);
-        notification.setReadStatus(false);
-        notification.setCreatedAt(LocalDateTime.now());
-        notification.setUpdatedAt(LocalDateTime.now());
-        notification.setDeleted(0);
-        notificationMapper.insert(notification);
-
-        // ★ 发送消息到 RabbitMQ（由消费者异步处理邮件）
-        ReminderMessage message = new ReminderMessage(
-                user.getId(),
-                pref.getId(),
-                pref.getType(),
-                currentTime
-        );
-
-        // 使用 Topic 交换机，按类型路由（未来可针对不同类型单独消费）
-        String routingKey = RabbitMQConfig.REMINDER_EMAIL_ROUTING_KEY + "." + pref.getType();
-        rabbitTemplate.convertAndSend(
-                RabbitMQConfig.REMINDER_EXCHANGE,
-                routingKey,
-                message
-        );
-
-        log.info("提醒消息已投递MQ: userId={}, type={}, routingKey={}, preferenceId={}",
-                user.getId(), pref.getType(), routingKey, pref.getId());
     }
 
     private boolean shouldSendToday(ReminderPreference pref) {

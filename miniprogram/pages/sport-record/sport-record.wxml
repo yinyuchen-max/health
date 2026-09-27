@@ -1,0 +1,142 @@
+<view class="page">
+  <!-- 微信运动步数卡片 -->
+  <view class="werun-card card-purple">
+    <view class="werun-header">
+      <text class="werun-label">今日步数</text>
+      <text class="werun-sync" bindtap="syncWeRun">同步微信运动</text>
+    </view>
+    <view class="werun-body">
+      <view class="werun-steps-wrap">
+        <text class="werun-steps">{{todaySteps || '--'}}</text>
+        <text class="werun-unit">步</text>
+      </view>
+      <text class="werun-icon">🏃</text>
+    </view>
+    <view class="werun-stats">
+      <view class="werun-stat">
+        <text class="werun-stat-value">{{todayCalories || 0}}</text>
+        <text class="werun-stat-label">消耗千卡</text>
+      </view>
+      <view class="werun-stat">
+        <text class="werun-stat-value">{{todayDistance || 0}}</text>
+        <text class="werun-stat-label">公里</text>
+      </view>
+      <view class="werun-stat">
+        <text class="werun-stat-value">{{todaySportMinutes || 0}}</text>
+        <text class="werun-stat-label">运动分钟</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 快速添加运动 -->
+  <view class="section-header">
+    <text class="section-title">快速添加</text>
+  </view>
+
+  <view class="quick-sport-grid">
+    <view class="quick-sport-item" wx:for="{{quickSports}}" wx:key="name" bindtap="quickAdd" data-sport="{{item}}">
+      <text class="quick-sport-emoji">{{item.emoji}}</text>
+      <text class="quick-sport-name">{{item.name}}</text>
+    </view>
+  </view>
+
+  <!-- 运动记录列表 -->
+  <view class="section-header">
+    <text class="section-title">运动记录</text>
+  </view>
+
+  <view class="record-list">
+    <view class="record-card card" wx:for="{{records}}" wx:key="id">
+      <view class="record-top">
+        <view class="record-type-wrap">
+          <text class="record-type-emoji">{{item.emoji || '🏃'}}</text>
+          <text class="record-type-name">{{item.sportType}}</text>
+        </view>
+        <text class="record-date">{{item.recordDate}}</text>
+      </view>
+      <view class="record-stats">
+        <view class="record-stat">
+          <text class="record-stat-value">{{item.duration}}</text>
+          <text class="record-stat-label">分钟</text>
+        </view>
+        <view class="record-stat" wx:if="{{item.calories}}">
+          <text class="record-stat-value">{{item.calories}}</text>
+          <text class="record-stat-label">千卡</text>
+        </view>
+        <view class="record-stat">
+          <text class="record-stat-value tag tag-purple">{{item.intensity}}</text>
+          <text class="record-stat-label">强度</text>
+        </view>
+      </view>
+      <view class="record-actions">
+        <text class="record-action-edit" bindtap="editRecord" data-id="{{item.id}}">编辑</text>
+        <text class="record-action-delete" bindtap="deleteRecord" data-id="{{item.id}}">删除</text>
+      </view>
+    </view>
+
+    <view class="empty-state" wx:if="{{records.length === 0}}">
+      <text class="empty-icon">🏃</text>
+      <text class="empty-text">暂无运动记录</text>
+      <text class="empty-tip">点击上方快速添加开始记录</text>
+    </view>
+  </view>
+
+  <!-- 手动添加按钮 -->
+  <button class="btn-add-manual" bindtap="openForm">+ 手动添加运动</button>
+
+  <!-- 添加/编辑弹窗 -->
+  <view class="modal-mask" wx:if="{{showForm}}" bindtap="closeForm">
+    <view class="modal-content" catchtap="">
+      <text class="modal-title">{{editingId ? '编辑运动' : '添加运动'}}</text>
+
+      <!-- 运动类型选择 -->
+      <view class="form-item">
+        <text class="form-label">运动类型</text>
+        <view class="sport-type-grid">
+          <view class="sport-type-item {{sportTypeIndex === index ? 'sport-type-active' : ''}}"
+                wx:for="{{sportTypeOptions}}" wx:key="*this"
+                bindtap="selectSportType" data-index="{{index}}">
+            <text class="sport-type-emoji">{{item.emoji}}</text>
+            <text class="sport-type-name">{{item.name}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 时长滑块 -->
+      <view class="form-item">
+        <text class="form-label">运动时长：{{form.duration}} 分钟</text>
+        <slider min="5" max="180" step="5" value="{{form.duration || 30}}"
+                bindchange="onDurationChange" activeColor="#7c3aed" backgroundColor="#ede9fe"
+                block-size="20" />
+      </view>
+
+      <!-- 强度选择 -->
+      <view class="form-item">
+        <text class="form-label">运动强度</text>
+        <view class="intensity-row">
+          <view class="intensity-item {{intensityIndex === index ? 'intensity-active' : ''}}"
+                wx:for="{{intensityOptions}}" wx:key="*this"
+                bindtap="selectIntensity" data-index="{{index}}">
+            <text>{{item}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 日期 -->
+      <view class="form-item">
+        <text class="form-label">记录日期</text>
+        <picker mode="date" bindchange="onDateChange" value="{{form.recordDate}}">
+          <view class="form-picker">{{form.recordDate || '请选择日期'}}</view>
+        </picker>
+      </view>
+
+      <!-- 备注 -->
+      <view class="form-item">
+        <text class="form-label">备注（选填）</text>
+        <textarea class="form-textarea" placeholder="记录一下感受..." value="{{form.notes}}" bindinput="onInput" data-field="notes" />
+      </view>
+
+      <button class="btn-primary" bindtap="submitForm" loading="{{saving}}">保存</button>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,205 @@
+.chat-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f4f7fa;
+}
+
+/* 滚动区 */
+.chat-scroll {
+  flex: 1;
+  padding: 24rpx;
+  overflow-y: auto;
+}
+
+/* 欢迎页 */
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 80rpx 40rpx 40rpx;
+}
+
+.welcome-orb {
+  font-size: 100rpx;
+  margin-bottom: 24rpx;
+}
+
+.welcome-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 12rpx;
+}
+
+.welcome-sub {
+  font-size: 26rpx;
+  color: #999;
+  margin-bottom: 40rpx;
+  text-align: center;
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20rpx;
+  width: 100%;
+}
+
+.quick-card {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+
+.quick-icon {
+  font-size: 40rpx;
+  margin-right: 16rpx;
+}
+
+.quick-text {
+  font-size: 26rpx;
+  color: #333;
+  flex: 1;
+}
+
+/* 消息行 */
+.msg-row {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 24rpx;
+}
+
+.msg-row.user {
+  justify-content: flex-end;
+}
+
+.avatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  flex-shrink: 0;
+}
+
+.assistant-avatar {
+  background: #f0f5ff;
+  margin-right: 16rpx;
+}
+
+.user-avatar {
+  background: #667eea;
+  color: #fff;
+  margin-left: 16rpx;
+}
+
+/* 气泡 */
+.bubble {
+  max-width: 70%;
+  padding: 24rpx 28rpx;
+  border-radius: 20rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.assistant-bubble {
+  background: #fff;
+  color: #333;
+  border-top-left-radius: 4rpx;
+}
+
+.user-bubble {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border-top-right-radius: 4rpx;
+}
+
+.bubble-text {
+  white-space: pre-wrap;
+}
+
+/* 打字动画 */
+.typing-dots {
+  display: flex;
+  gap: 8rpx;
+}
+
+.typing-dots .dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #999;
+  animation: typing 1.4s infinite;
+}
+
+.typing-dots .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
+  30% { opacity: 1; transform: scale(1); }
+}
+
+/* 底部输入区 */
+.chat-footer {
+  background: #fff;
+  padding: 20rpx 24rpx;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #eee;
+}
+
+.input-wrap {
+  display: flex;
+  align-items: center;
+  background: #f8f9fa;
+  border-radius: 40rpx;
+  padding: 12rpx 12rpx 12rpx 28rpx;
+}
+
+.chat-input {
+  flex: 1;
+  font-size: 28rpx;
+  height: 60rpx;
+}
+
+.btn-send, .btn-stop {
+  padding: 16rpx 32rpx;
+  border-radius: 30rpx;
+  font-size: 26rpx;
+  font-weight: 500;
+}
+
+.btn-send {
+  background: #e0e0e0;
+  color: #999;
+}
+
+.btn-send.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+
+.btn-stop {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+.input-hint {
+  display: block;
+  text-align: center;
+  font-size: 22rpx;
+  color: #999;
+  margin-top: 12rpx;
+}

@@ -1,96 +1,159 @@
 <template>
   <div class="dashboard">
-    <el-card class="hero-card">
-      <div class="hero-content">
-        <div>
-          <p class="eyebrow">Smart Health Dashboard</p>
-          <h2>{{ greeting }}，{{ userStore.userInfo.username || '用户' }}</h2>
-          <p class="hero-desc">
-            今天是 {{ todayLabel }}。这里汇总健康记录、运动记录和智能分析结果，方便快速查看趋势、风险与恢复状态。
-          </p>
+    <!-- 健康指标卡片 -->
+    <el-row :gutter="16">
+      <el-col :xs="24" :sm="12" :lg="6" v-for="card in metricCards" :key="card.label">
+        <div class="metric-card">
+          <div class="metric-header">
+            <div class="metric-icon" :style="{ background: card.iconBg }">
+              <el-icon :style="{ color: card.iconColor }" :size="22"><component :is="card.icon" /></el-icon>
+            </div>
+            <span class="metric-label">{{ card.label }}</span>
+          </div>
+          <div class="metric-body">
+            <span class="metric-value">{{ card.value }}</span>
+            <el-tag :type="card.statusType" size="small" class="metric-status">{{ card.statusText }}</el-tag>
+          </div>
+          <div class="metric-unit">{{ card.unit }}</div>
+          <div class="metric-sparkline" :ref="el => setSparklineRef(card.refKey, el)"></div>
+          <div class="metric-trend" v-if="card.trend">
+            <span :class="card.trendClass">{{ card.trend }}</span>
+          </div>
         </div>
-        <div class="hero-actions">
-          <el-button type="primary" @click="router.push('/app/smart-health')">查看智能健康中心</el-button>
-          <el-button @click="router.push('/app/health')">新增健康记录</el-button>
+      </el-col>
+    </el-row>
+
+    <!-- 健康记录区域 -->
+    <div class="records-section">
+      <div class="records-header">
+        <div class="records-title-area">
+          <div class="records-icon">
+            <el-icon :size="20"><Document /></el-icon>
+          </div>
+          <h3 class="records-title">健康记录</h3>
+        </div>
+        <div class="records-actions">
+          <el-input
+            v-model="searchKeyword"
+            placeholder="搜索日期、项目或备注..."
+            clearable
+            class="search-input"
+            :prefix-icon="Search"
+          />
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            range-separator="~"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            value-format="YYYY-MM-DD"
+            class="date-range"
+          />
+          <el-button type="primary" @click="router.push('/app/health')">
+            <el-icon><Plus /></el-icon>
+            新增记录
+          </el-button>
         </div>
       </div>
-    </el-card>
 
-    <el-row :gutter="16">
-      <el-col :xs="24" :sm="12" :lg="6" v-for="item in summaryCards" :key="item.label">
-        <el-card class="stat-card">
-          <div class="stat-label">{{ item.label }}</div>
-          <div class="stat-value">{{ item.value }}</div>
-          <div class="stat-hint">{{ item.hint }}</div>
-        </el-card>
-      </el-col>
-    </el-row>
+      <!-- Tab 筛选 -->
+      <div class="tab-bar">
+        <el-button
+          v-for="tab in tabs"
+          :key="tab.key"
+          :type="activeTab === tab.key ? 'primary' : ''"
+          :plain="activeTab !== tab.key"
+          class="tab-btn"
+          @click="activeTab = tab.key"
+        >
+          {{ tab.label }}
+        </el-button>
+      </div>
 
-    <el-row :gutter="16">
-      <el-col :xs="24" :xl="14">
-        <el-card class="chart-card">
+      <!-- 记录表格 -->
+      <el-table :data="filteredRecords" :loading="loading" class="records-table">
+        <el-table-column width="50">
           <template #header>
-            <div class="section-title">健康指标趋势</div>
+            <el-checkbox v-model="selectAll" @change="toggleSelectAll" />
           </template>
-          <el-empty v-if="!healthTrend.length" description="暂无健康记录" />
-          <div v-else ref="healthTrendRef" class="chart"></div>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :xl="10">
-        <el-card class="chart-card">
-          <template #header>
-            <div class="section-title">运动类型分布</div>
+          <template #default="{ row }">
+            <el-checkbox v-model="row.selected" />
           </template>
-          <el-empty v-if="!sportDistribution.length" description="暂无运动记录" />
-          <div v-else ref="sportPieRef" class="chart"></div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </el-table-column>
+        <el-table-column label="日期" width="160" sortable>
+          <template #default="{ row }">
+            <span class="date-cell">{{ row.recordDate }}</span>
+            <span class="time-cell">{{ row.recordTime || '08:30' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="血压" width="140" sortable>
+          <template #default="{ row }">
+            <span class="value-cell">{{ formatBP(row) }}</span>
+            <el-tag :type="getBPStatus(row) === '正常' ? 'success' : getBPStatus(row) === '偏高' ? 'danger' : 'warning'" size="small" class="status-tag">
+              {{ getBPStatus(row) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="心率" width="130" sortable>
+          <template #default="{ row }">
+            <span class="value-cell">{{ row.heartRate ?? '--' }} bpm</span>
+            <el-tag :type="getHRStatus(row) === '正常' ? 'success' : 'danger'" size="small" class="status-tag">
+              {{ getHRStatus(row) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="血糖" width="140" sortable>
+          <template #default="{ row }">
+            <span class="value-cell">{{ row.bloodSugar ?? '--' }} mmol/L</span>
+            <el-tag :type="getBSStatus(row) === '正常' ? 'success' : getBSStatus(row) === '偏高' ? 'danger' : 'warning'" size="small" class="status-tag">
+              {{ getBSStatus(row) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="体重" width="120" sortable>
+          <template #default="{ row }">
+            <span class="value-cell">{{ row.weight ?? '--' }} kg</span>
+            <el-tag :type="getWeightStatus(row) === '正常' ? 'success' : 'warning'" size="small" class="status-tag">
+              {{ getWeightStatus(row) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="备注" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="notes-cell">{{ row.notes || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="140" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" text type="primary" @click="router.push('/app/health')">编辑</el-button>
+            <el-button size="small" text type="danger" @click="removeRecord(row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
 
-    <el-row :gutter="16">
-      <el-col :xs="24" :lg="14">
-        <el-card>
-          <template #header>
-            <div class="section-title">今日重点建议</div>
-          </template>
-          <el-empty v-if="!quickTips.length" description="暂无建议" />
-          <div v-else class="tip-list">
-            <div v-for="tip in quickTips" :key="tip" class="tip-item">
-              <el-icon class="tip-icon"><Opportunity /></el-icon>
-              <span>{{ tip }}</span>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :lg="10">
-        <el-card>
-          <template #header>
-            <div class="section-title">风险优先级</div>
-          </template>
-          <el-empty v-if="!priorityRisks.length" description="暂无风险数据" />
-          <div v-else class="risk-list">
-            <div v-for="risk in priorityRisks" :key="risk.assessmentType" class="risk-item">
-              <div class="risk-head">
-                <strong>{{ riskLabels[risk.assessmentType] || risk.assessmentType }}</strong>
-                <el-tag :type="tagType(risk.riskLevel)">{{ levelText(risk.riskLevel) }}</el-tag>
-              </div>
-              <div class="risk-score-line">
-                <span>风险分</span>
-                <strong>{{ risk.riskScore }}</strong>
-              </div>
-              <p>{{ risk.summary }}</p>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+      <div class="pagination-area">
+        <span class="total-text">共 {{ filteredRecords.length }} 条</span>
+        <el-select v-model="pageSize" size="small" style="width: 100px; margin: 0 12px">
+          <el-option :value="10" label="10条/页" />
+          <el-option :value="20" label="20条/页" />
+          <el-option :value="50" label="50条/页" />
+        </el-select>
+        <el-pagination
+          v-model:current-page="currentPage"
+          :total="filteredRecords.length"
+          :page-size="pageSize"
+          layout="prev, pager, next"
+          small
+        />
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Opportunity } from '@element-plus/icons-vue'
+import { Search, Plus, Document, Monitor, FirstAidKit, Odometer, DataLine } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import request from '../utils/request'
 import { useUserStore } from '../store/user'
@@ -99,371 +162,226 @@ import { useAnalyticsStore } from '../store/analytics'
 const router = useRouter()
 const userStore = useUserStore()
 const analyticsStore = useAnalyticsStore()
-const overview = ref(null)
 
-const healthTrendRef = ref(null)
-const sportPieRef = ref(null)
-let healthTrendChart = null
-let sportPieChart = null
+const loading = ref(false)
+const records = ref([])
+const searchKeyword = ref('')
+const dateRange = ref([])
+const activeTab = ref('all')
+const currentPage = ref(1)
+const pageSize = ref(10)
+const selectAll = ref(false)
 
-const riskLabels = {
-  BMI: 'BMI 风险',
-  BLOOD_PRESSURE: '血压风险',
-  DIABETES: '血糖风险',
-  CARDIO: '心血管风险'
-}
+const sparklineRefs = {}
+const sparklineCharts = {}
 
-const chartPalette = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#14b8a6']
-
-const todayLabel = new Date().toLocaleDateString('zh-CN', {
-  year: 'numeric',
-  month: 'long',
-  day: 'numeric',
-  weekday: 'long'
-})
-
-const greeting = computed(() => {
-  const hour = new Date().getHours()
-  if (hour < 12) return '早上好'
-  if (hour < 18) return '下午好'
-  return '晚上好'
-})
-
-const healthTrend = computed(() =>
-  [...analyticsStore.healthRecords]
-    .filter(record => record.recordDate)
-    .sort((a, b) => new Date(a.recordDate) - new Date(b.recordDate))
-    .slice(-10)
-)
-
-const latestHealthRecord = computed(() => {
-  const records = [...analyticsStore.healthRecords]
-    .filter(record => record.recordDate)
-    .sort((a, b) => new Date(b.recordDate) - new Date(a.recordDate))
-  return records[0] || null
-})
-
-const weeklySportMinutes = computed(() => {
-  const threshold = new Date()
-  threshold.setDate(threshold.getDate() - 6)
-  return analyticsStore.sportRecords
-    .filter(record => record.recordDate && new Date(record.recordDate) >= threshold)
-    .reduce((sum, record) => sum + Number(record.duration || 0), 0)
-})
-
-const sportDistribution = computed(() => {
-  const grouped = analyticsStore.sportRecords.reduce((acc, item) => {
-    const key = item.sportType || '其他'
-    acc[key] = (acc[key] || 0) + Number(item.duration || 0)
-    return acc
-  }, {})
-
-  return Object.entries(grouped)
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value)
-})
-
-const quickTips = computed(() => overview.value?.quickTips || [])
-const priorityRisks = computed(() =>
-  [...(overview.value?.riskAssessments || [])]
-    .sort((a, b) => Number(b.riskScore || 0) - Number(a.riskScore || 0))
-    .slice(0, 3)
-)
-
-const averageWeight = computed(() => {
-  const values = healthTrend.value.map(item => Number(item.weight)).filter(value => !Number.isNaN(value))
-  if (!values.length) return null
-  return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1))
-})
-
-const summaryCards = computed(() => [
-  {
-    label: 'BMI',
-    value: overview.value?.bmi ?? '--',
-    hint: overview.value?.overallStatus || '等待分析'
-  },
-  {
-    label: '最新血压',
-    value: latestHealthRecord.value?.bloodPressureSystolic
-      ? `${latestHealthRecord.value.bloodPressureSystolic}/${latestHealthRecord.value.bloodPressureDiastolic}`
-      : '--',
-    hint: 'mmHg'
-  },
-  {
-    label: '近 7 天运动',
-    value: weeklySportMinutes.value,
-    hint: '分钟'
-  },
-  {
-    label: '压力等级',
-    value: overview.value?.stressInsight?.level || '--',
-    hint: overview.value?.stressInsight?.summary || '等待分析'
+const setSparklineRef = (key, el) => {
+  if (el) {
+    sparklineRefs[key] = el
   }
-])
-
-const tagType = (level) => {
-  if (level === 'HIGH') return 'danger'
-  if (level === 'MEDIUM') return 'warning'
-  return 'success'
 }
 
-const levelText = (level) => {
-  if (level === 'HIGH') return '高'
-  if (level === 'MEDIUM') return '中'
-  if (level === 'LOW') return '低'
-  return '--'
+const tabs = [
+  { key: 'all', label: '全部' },
+  { key: 'bp', label: '血压' },
+  { key: 'hr', label: '心率' },
+  { key: 'bs', label: '血糖' },
+  { key: 'weight', label: '体重' },
+  { key: 'notes', label: '备注' }
+]
+
+const latestRecord = computed(() => {
+  const sorted = [...records.value].filter(r => r.recordDate).sort((a, b) => new Date(b.recordDate) - new Date(a.recordDate))
+  return sorted[0] || null
+})
+
+const previousRecord = computed(() => {
+  const sorted = [...records.value].filter(r => r.recordDate).sort((a, b) => new Date(b.recordDate) - new Date(a.recordDate))
+  return sorted[1] || null
+})
+
+const formatBP = (row) => {
+  if (!row?.bloodPressureSystolic || !row?.bloodPressureDiastolic) return '--'
+  return `${row.bloodPressureSystolic}/${row.bloodPressureDiastolic}`
 }
 
-const ensureChart = (instance, chartRef) => {
-  if (instance && instance.getDom() !== chartRef.value) {
-    instance.dispose()
-    return null
+const getBPStatus = (row) => {
+  if (!row?.bloodPressureSystolic) return '--'
+  if (row.bloodPressureSystolic > 140 || row.bloodPressureDiastolic > 90) return '偏高'
+  if (row.bloodPressureSystolic < 90 || row.bloodPressureDiastolic < 60) return '偏低'
+  return '正常'
+}
+
+const getHRStatus = (row) => {
+  if (!row?.heartRate) return '--'
+  if (row.heartRate > 100) return '偏高'
+  if (row.heartRate < 60) return '偏低'
+  return '正常'
+}
+
+const getBSStatus = (row) => {
+  if (!row?.bloodSugar) return '--'
+  if (row.bloodSugar > 7.0) return '偏高'
+  if (row.bloodSugar < 3.9) return '偏低'
+  return '正常'
+}
+
+const getWeightStatus = (row) => {
+  if (!row?.weight) return '--'
+  return '正常'
+}
+
+const metricCards = computed(() => {
+  const latest = latestRecord.value
+  const prev = previousRecord.value
+  const bp = latest ? `${latest.bloodPressureSystolic || '--'}/${latest.bloodPressureDiastolic || '--'}` : '--'
+  const hr = latest?.heartRate ?? '--'
+  const bs = latest?.bloodSugar ?? '--'
+  const weightDiff = latest?.weight != null && prev?.weight != null
+    ? (latest.weight - prev.weight).toFixed(1)
+    : null
+
+  return [
+    {
+      label: '最新血压', value: bp, unit: 'mmHg',
+      statusText: getBPStatus(latest || {}), statusType: getBPStatus(latest || {}) === '正常' ? 'success' : 'danger',
+      icon: FirstAidKit, iconBg: '#FEE2E2', iconColor: '#EF4444',
+      refKey: 'bp',
+      trend: latest?.bloodPressureSystolic ? `较上次 ${latest.bloodPressureSystolic - (prev?.bloodPressureSystolic || latest.bloodPressureSystolic) > 0 ? '+' : ''}${latest.bloodPressureSystolic - (prev?.bloodPressureSystolic || latest.bloodPressureSystolic)}` : null,
+      trendClass: latest?.bloodPressureSystolic && latest.bloodPressureSystolic > (prev?.bloodPressureSystolic || 0) ? 'trend-up' : 'trend-down'
+    },
+    {
+      label: '最新心率', value: hr, unit: 'bpm',
+      statusText: getHRStatus(latest || {}), statusType: getHRStatus(latest || {}) === '正常' ? 'success' : 'danger',
+      icon: Monitor, iconBg: '#DBEAFE', iconColor: '#3B82F6',
+      refKey: 'hr',
+      trend: latest?.heartRate ? `较上次 ${latest.heartRate - (prev?.heartRate || latest.heartRate) > 0 ? '+' : ''}${latest.heartRate - (prev?.heartRate || latest.heartRate)}` : null,
+      trendClass: latest?.heartRate && latest.heartRate > (prev?.heartRate || 0) ? 'trend-up' : 'trend-down'
+    },
+    {
+      label: '最新血糖', value: bs, unit: 'mmol/L',
+      statusText: getBSStatus(latest || {}), statusType: getBSStatus(latest || {}) === '正常' ? 'success' : 'danger',
+      icon: Odometer, iconBg: '#F3E8FF', iconColor: '#8B5CF6',
+      refKey: 'bs',
+      trend: latest?.bloodSugar ? `较上次 ${latest.bloodSugar - (prev?.bloodSugar || latest.bloodSugar) > 0 ? '+' : ''}${(latest.bloodSugar - (prev?.bloodSugar || latest.bloodSugar)).toFixed(1)}` : null,
+      trendClass: latest?.bloodSugar && latest.bloodSugar > (prev?.bloodSugar || 0) ? 'trend-up' : 'trend-down'
+    },
+    {
+      label: '体重变化', value: weightDiff != null ? `${Number(weightDiff) > 0 ? '+' : ''}${weightDiff} kg` : '--', unit: '',
+      statusText: '', statusType: 'info',
+      icon: DataLine, iconBg: '#D1FAE5', iconColor: '#10B981',
+      refKey: 'weight',
+      trend: weightDiff != null ? `较上次 ${Number(weightDiff) > 0 ? '+' : ''}${weightDiff} kg` : null,
+      trendClass: weightDiff != null && Number(weightDiff) > 0 ? 'trend-up' : 'trend-down'
+    }
+  ]
+})
+
+const filteredRecords = computed(() => {
+  let list = [...records.value]
+
+  if (activeTab.value !== 'all') {
+    const tabFieldMap = { bp: 'bloodPressureSystolic', hr: 'heartRate', bs: 'bloodSugar', weight: 'weight', notes: 'notes' }
+    const field = tabFieldMap[activeTab.value]
+    list = list.filter(r => r[field] != null && r[field] !== '')
   }
-  return instance || echarts.init(chartRef.value)
+
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  if (keyword) {
+    list = list.filter(r =>
+      (r.recordDate || '').toLowerCase().includes(keyword) ||
+      (r.notes || '').toLowerCase().includes(keyword)
+    )
+  }
+
+  if (dateRange.value?.length === 2) {
+    list = list.filter(r => r.recordDate >= dateRange.value[0] && r.recordDate <= dateRange.value[1])
+  }
+
+  list.sort((a, b) => new Date(b.recordDate) - new Date(a.recordDate))
+  return list
+})
+
+const toggleSelectAll = (val) => {
+  filteredRecords.value.forEach(r => r.selected = val)
 }
 
-const renderHealthTrendChart = () => {
-  if (!healthTrendRef.value || !healthTrend.value.length) return
-  healthTrendChart = ensureChart(healthTrendChart, healthTrendRef)
+const loadRecords = async () => {
+  loading.value = true
+  try {
+    const userId = userStore.userInfo?.id || 1
+    const response = await request.get(`/health/records/${userId}`, {
+      params: { pageNum: 1, pageSize: 1000 }
+    })
+    records.value = (response?.data?.records || []).map(r => ({ ...r, selected: false }))
+    analyticsStore.setHealthRecords(records.value, userId)
+  } catch (error) {
+    console.error('加载健康记录失败', error)
+    records.value = []
+  } finally {
+    loading.value = false
+  }
+}
 
-  const dates = healthTrend.value.map(item => item.recordDate)
-  const weights = healthTrend.value.map(item => item.weight ?? null)
-  const systolic = healthTrend.value.map(item => item.bloodPressureSystolic ?? null)
-  const diastolic = healthTrend.value.map(item => item.bloodPressureDiastolic ?? null)
+const removeRecord = async (id) => {
+  try {
+    await request.delete(`/health/record/${id}`)
+    await loadRecords()
+  } catch (error) {
+    console.error('删除失败', error)
+  }
+}
 
-  healthTrendChart.setOption({
-    color: ['#2563eb', '#ef4444', '#f59e0b'],
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(15, 23, 42, 0.92)',
-      borderWidth: 0,
-      textStyle: { color: '#fff' }
-    },
-    legend: {
-      top: 0,
-      itemWidth: 10,
-      itemHeight: 10,
-      textStyle: { color: '#475569' },
-      data: ['体重', '收缩压', '舒张压']
-    },
-    grid: {
-      left: 48,
-      right: 24,
-      top: 52,
-      bottom: 44
-    },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      axisTick: { show: false },
-      axisLine: { lineStyle: { color: '#cbd5e1' } },
-      axisLabel: { color: '#64748b' },
-      data: dates
-    },
-    yAxis: [
-      {
-        type: 'value',
-        name: 'kg',
-        position: 'left',
-        splitLine: { lineStyle: { color: '#e2e8f0' } },
-        axisLabel: { color: '#64748b' }
-      },
-      {
-        type: 'value',
-        name: 'mmHg',
-        position: 'right',
-        splitLine: { show: false },
-        axisLabel: { color: '#64748b' }
-      }
-    ],
-    series: [
-      {
-        name: '体重',
+const renderSparklines = () => {
+  const colors = { bp: '#EF4444', hr: '#3B82F6', bs: '#8B5CF6', weight: '#10B981' }
+  const dataMap = {
+    bp: records.value.map(r => r.bloodPressureSystolic).filter(Boolean),
+    hr: records.value.map(r => r.heartRate).filter(Boolean),
+    bs: records.value.map(r => r.bloodSugar).filter(Boolean),
+    weight: records.value.map(r => r.weight).filter(Boolean)
+  }
+
+  Object.keys(sparklineRefs).forEach(key => {
+    const el = sparklineRefs[key]
+    if (!el) return
+    if (sparklineCharts[key]) sparklineCharts[key].dispose()
+    const chart = echarts.init(el)
+    sparklineCharts[key] = chart
+    chart.setOption({
+      grid: { left: 0, right: 0, top: 4, bottom: 0 },
+      xAxis: { show: false, type: 'category', data: dataMap[key].map((_, i) => i) },
+      yAxis: { show: false, type: 'value' },
+      series: [{
         type: 'line',
         smooth: true,
-        symbolSize: 8,
-        yAxisIndex: 0,
-        data: weights,
+        symbol: 'none',
+        data: dataMap[key],
+        lineStyle: { color: colors[key], width: 2 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(37, 99, 235, 0.28)' },
-            { offset: 1, color: 'rgba(37, 99, 235, 0.02)' }
+            { offset: 0, color: colors[key] + '30' },
+            { offset: 1, color: colors[key] + '05' }
           ])
-        },
-        markLine: averageWeight.value == null
-          ? undefined
-          : {
-              symbol: 'none',
-              label: {
-                formatter: `均值 ${averageWeight.value}kg`,
-                color: '#1d4ed8'
-              },
-              lineStyle: {
-                type: 'dashed',
-                color: 'rgba(37, 99, 235, 0.55)'
-              },
-              data: [{ yAxis: averageWeight.value }]
-            }
-      },
-      {
-        name: '收缩压',
-        type: 'line',
-        smooth: true,
-        symbolSize: 7,
-        yAxisIndex: 1,
-        data: systolic,
-        markLine: {
-          symbol: 'none',
-          lineStyle: {
-            type: 'dashed',
-            color: 'rgba(239, 68, 68, 0.45)'
-          },
-          label: {
-            formatter: '警戒 140',
-            color: '#b91c1c'
-          },
-          data: [{ yAxis: 140 }]
         }
-      },
-      {
-        name: '舒张压',
-        type: 'line',
-        smooth: true,
-        symbolSize: 7,
-        yAxisIndex: 1,
-        data: diastolic,
-        markLine: {
-          symbol: 'none',
-          lineStyle: {
-            type: 'dashed',
-            color: 'rgba(245, 158, 11, 0.45)'
-          },
-          label: {
-            formatter: '警戒 90',
-            color: '#b45309'
-          },
-          data: [{ yAxis: 90 }]
-        }
-      }
-    ]
-  })
-}
-
-const renderSportPieChart = () => {
-  if (!sportPieRef.value || !sportDistribution.value.length) return
-  sportPieChart = ensureChart(sportPieChart, sportPieRef)
-
-  sportPieChart.setOption({
-    color: chartPalette,
-    tooltip: {
-      trigger: 'item',
-      formatter: ({ name, value, percent }) => `${name}<br/>${value} 分钟，占比 ${percent}%`
-    },
-    legend: {
-      bottom: 0,
-      icon: 'circle',
-      itemWidth: 10,
-      itemHeight: 10,
-      textStyle: { color: '#475569' }
-    },
-    series: [
-      {
-        name: '运动时长',
-        type: 'pie',
-        radius: ['42%', '72%'],
-        center: ['50%', '46%'],
-        minAngle: 8,
-        avoidLabelOverlap: true,
-        itemStyle: {
-          borderRadius: 12,
-          borderColor: '#fff',
-          borderWidth: 4
-        },
-        label: {
-          formatter: ({ name, value }) => `${name}\n${value} 分钟`,
-          color: '#334155',
-          fontSize: 12
-        },
-        labelLine: {
-          lineStyle: { color: '#94a3b8' }
-        },
-        emphasis: {
-          scale: true,
-          scaleSize: 8
-        },
-        data: sportDistribution.value
-      }
-    ],
-    graphic: {
-      type: 'group',
-      left: 'center',
-      top: '36%',
-      children: [
-        {
-          type: 'text',
-          style: {
-            text: `${weeklySportMinutes.value}`,
-            fill: '#0f172a',
-            fontSize: 24,
-            fontWeight: 700,
-            textAlign: 'center'
-          }
-        },
-        {
-          type: 'text',
-          top: 28,
-          style: {
-            text: '近 7 天分钟数',
-            fill: '#64748b',
-            fontSize: 12,
-            textAlign: 'center'
-          }
-        }
-      ]
-    }
+      }]
+    })
   })
 }
 
 const resizeCharts = () => {
-  healthTrendChart?.resize()
-  sportPieChart?.resize()
+  Object.values(sparklineCharts).forEach(c => c?.resize())
 }
-
-const loadData = async () => {
-  const userId = userStore.userInfo?.id || 1
-  await Promise.all([
-    analyticsStore.fetchHealthRecords(userId, { pageNum: 1, pageSize: 1000 }),
-    analyticsStore.fetchSportRecords(userId, { pageNum: 1, pageSize: 1000 })
-  ])
-
-  const response = await request.get('/smart-health/overview', {
-    params: { userId }
-  })
-  overview.value = response.data
-}
-
-watch([healthTrend, sportDistribution, weeklySportMinutes], async () => {
-  await nextTick()
-  renderHealthTrendChart()
-  renderSportPieChart()
-}, { deep: true })
 
 onMounted(async () => {
-  try {
-    await loadData()
-    await nextTick()
-    renderHealthTrendChart()
-    renderSportPieChart()
-    window.addEventListener('resize', resizeCharts)
-  } catch (error) {
-    console.error('加载首页数据失败', error)
-  }
+  await loadRecords()
+  await nextTick()
+  renderSparklines()
+  window.addEventListener('resize', resizeCharts)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeCharts)
-  healthTrendChart?.dispose()
-  sportPieChart?.dispose()
+  Object.values(sparklineCharts).forEach(c => c?.dispose())
 })
 </script>
 
@@ -471,183 +389,234 @@ onBeforeUnmount(() => {
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
-.hero-card {
-  border: none;
-  background:
-    radial-gradient(circle at top left, rgba(77, 184, 255, 0.35), transparent 35%),
-    linear-gradient(135deg, #0f4c81, #1c7ed6 55%, #7dd3fc);
-  color: #fff;
+.metric-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid #F0F4F8;
+  transition: all 0.3s;
 }
 
-.hero-content {
+.metric-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.metric-header {
   display: flex;
-  justify-content: space-between;
-  gap: 24px;
   align-items: center;
-  flex-wrap: wrap;
-}
-
-.eyebrow {
-  margin: 0 0 8px;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  opacity: 0.8;
-}
-
-.hero-desc {
-  margin: 8px 0 0;
-  max-width: 680px;
-  line-height: 1.7;
-}
-
-.hero-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.stat-card {
-  min-height: 128px;
-}
-
-.stat-label {
-  color: #64748b;
-  font-size: 14px;
-}
-
-.stat-value {
-  margin-top: 12px;
-  font-size: 34px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.stat-hint {
-  margin-top: 10px;
-  color: #2563eb;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.section-title {
-  font-weight: 600;
-}
-
-.chart-card {
-  min-height: 420px;
-}
-
-.chart {
-  width: 100%;
-  height: 340px;
-}
-
-.tip-list,
-.risk-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.tip-item,
-.risk-item {
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: #f8fafc;
-}
-
-.tip-item {
-  display: flex;
   gap: 10px;
-  align-items: flex-start;
+  margin-bottom: 12px;
 }
 
-.tip-icon {
-  margin-top: 2px;
-  color: #2563eb;
+.metric-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
 }
 
-.risk-head,
-.risk-score-line {
+.metric-label {
+  font-size: 14px;
+  color: #64748B;
+  font-weight: 500;
+}
+
+.metric-body {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.metric-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1E293B;
+  line-height: 1.2;
+}
+
+.metric-status {
+  font-size: 12px;
+}
+
+.metric-unit {
+  font-size: 13px;
+  color: #94A3B8;
+  margin-bottom: 8px;
+}
+
+.metric-sparkline {
+  width: 100%;
+  height: 40px;
+}
+
+.metric-trend {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.trend-up {
+  color: #EF4444;
+}
+
+.trend-down {
+  color: #10B981;
+}
+
+.records-section {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px 24px;
+  border: 1px solid #F0F4F8;
+}
+
+.records-header {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
   align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.risk-score-line {
-  margin: 12px 0 8px;
-  color: #1d4ed8;
+.records-title-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.risk-item p {
+.records-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: #EBF5FF;
+  border-radius: 10px;
+  color: #3B82F6;
+}
+
+.records-title {
   margin: 0;
-  color: #4b5563;
-  line-height: 1.6;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1E293B;
 }
 
-/* 移动端适配 */
+.records-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  width: 240px;
+}
+
+.date-range {
+  width: 260px;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  border-radius: 8px;
+  font-size: 13px;
+  padding: 6px 16px;
+}
+
+.records-table {
+  border-radius: 12px;
+}
+
+.records-table :deep(.el-table__header th) {
+  background: #F8FAFC;
+  color: #64748B;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.date-cell {
+  font-weight: 600;
+  color: #1E293B;
+  font-size: 13px;
+}
+
+.time-cell {
+  color: #94A3B8;
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.value-cell {
+  font-weight: 600;
+  color: #1E293B;
+  font-size: 13px;
+  margin-right: 8px;
+}
+
+.status-tag {
+  font-size: 11px;
+  border-radius: 4px;
+}
+
+.notes-cell {
+  color: #64748B;
+  font-size: 13px;
+}
+
+.pagination-area {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 16px;
+  gap: 8px;
+}
+
+.total-text {
+  font-size: 13px;
+  color: #94A3B8;
+}
+
 @media (max-width: 768px) {
-  .hero-card :deep(.el-card__body) {
-    padding: 18px;
-  }
-
-  .hero-content {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
-
-  .hero-content h2 {
-    font-size: 18px;
-  }
-
-  .hero-desc {
-    font-size: 13px;
-  }
-
-  .hero-actions {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .hero-actions .el-button {
-    width: 100%;
-    margin-left: 0;
-  }
-
-  .stat-card {
-    min-height: auto;
-  }
-
-  .stat-value {
+  .metric-value {
     font-size: 24px;
-    margin-top: 8px;
   }
 
-  .stat-label {
-    font-size: 13px;
+  .records-header {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .chart-card {
-    min-height: auto;
+  .records-actions {
+    flex-direction: column;
   }
 
-  .chart {
-    height: 260px;
+  .search-input,
+  .date-range {
+    width: 100% !important;
   }
 
-  .tip-item,
-  .risk-item {
-    padding: 12px;
+  .tab-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
   }
 
-  .section-title {
-    font-size: 14px;
+  .tab-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 }
 </style>

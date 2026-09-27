@@ -1,0 +1,51 @@
+<view class="page">
+  <!-- 健康文章 -->
+  <view class="section-header">
+    <text class="section-title">健康文章</text>
+    <text class="section-more">查看更多</text>
+  </view>
+
+  <view class="article-list">
+    <view class="article-card card" wx:for="{{articles}}" wx:key="id" bindtap="readArticle" data-id="{{item.id}}">
+      <view class="article-info">
+        <text class="article-title">{{item.title}}</text>
+        <text class="article-meta">{{item.views}} 阅读</text>
+      </view>
+      <view class="article-thumb">
+        <text class="article-thumb-emoji">{{item.emoji}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 健康工具 -->
+  <view class="section-header">
+    <text class="section-title">健康工具</text>
+  </view>
+
+  <view class="tools-grid">
+    <view class="tool-item" bindtap="goBmiCalculator">
+      <view class="tool-icon tool-icon-bmi">
+        <text class="tool-emoji">⚖️</text>
+      </view>
+      <text class="tool-name">BMI计算器</text>
+    </view>
+    <view class="tool-item" bindtap="goCalorieCalculator">
+      <view class="tool-icon tool-icon-cal">
+        <text class="tool-emoji"></text>
+      </view>
+      <text class="tool-name">热量计算器</text>
+    </view>
+    <view class="tool-item" bindtap="goWaterReminder">
+      <view class="tool-icon tool-icon-water">
+        <text class="tool-emoji">💧</text>
+      </view>
+      <text class="tool-name">喝水提醒</text>
+    </view>
+    <view class="tool-item" bindtap="goMoreTools">
+      <view class="tool-icon tool-icon-more">
+        <text class="tool-emoji">⊞</text>
+      </view>
+      <text class="tool-name">更多工具</text>
+    </view>
+  </view>
+</view>

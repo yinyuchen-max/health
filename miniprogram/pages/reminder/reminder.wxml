@@ -1,0 +1,69 @@
+<view class="container">
+  <view class="toolbar">
+    <text class="toolbar-title">提醒配置</text>
+    <button class="btn-add" bindtap="openForm">+ 新增提醒</button>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:if="{{reminders.length === 0}}" class="empty-state">
+    <text class="empty-icon">⏰</text>
+    <text class="empty-text">暂无提醒</text>
+    <text class="empty-tip">添加提醒，按时收到健康通知</text>
+  </view>
+
+  <!-- 提醒列表 -->
+  <view wx:else class="reminder-list">
+    <view wx:for="{{reminders}}" wx:key="id" class="reminder-card card">
+      <view class="reminder-head">
+        <view class="reminder-info">
+          <text class="reminder-type">{{typeLabels[item.type] || item.type}}</text>
+          <text class="reminder-time">⏰ {{item.time}}</text>
+        </view>
+        <switch checked="{{item.enabled}}" bindchange="toggleReminder" data-id="{{item.id}}" color="#667eea" />
+      </view>
+      <view class="reminder-body">
+        <text wx:if="{{item.notes}}" class="reminder-notes">{{item.notes}}</text>
+        <view class="reminder-actions">
+          <text class="action-edit" bindtap="editReminder" data-id="{{item.id}}">编辑</text>
+          <text class="action-delete" bindtap="deleteReminder" data-id="{{item.id}}">删除</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 新增/编辑弹窗 -->
+  <view wx:if="{{showForm}}" class="modal-mask" bindtap="closeForm">
+    <view class="modal-content" catchtap="">
+      <text class="modal-title">{{editingId ? '编辑提醒' : '新增提醒'}}</text>
+
+      <view class="form-item">
+        <text class="form-label">提醒类型</text>
+        <picker range="{{typeOptions}}" range-key="label" value="{{typeIndex}}" bindchange="onTypeChange">
+          <view class="form-picker">{{typeOptions[typeIndex].label || '请选择类型'}}</view>
+        </picker>
+      </view>
+
+      <view class="form-item">
+        <text class="form-label">提醒时间</text>
+        <picker mode="time" value="{{form.time}}" bindchange="onTimeChange">
+          <view class="form-picker">{{form.time || '请选择时间'}}</view>
+        </picker>
+      </view>
+
+      <view class="form-item">
+        <text class="form-label">备注</text>
+        <textarea class="form-textarea" placeholder="可选" maxlength="200" value="{{form.notes}}" bindinput="onInput" data-field="notes" />
+      </view>
+
+      <view class="form-item">
+        <text class="form-label">启用状态</text>
+        <switch checked="{{form.enabled}}" bindchange="onEnabledChange" color="#667eea" />
+      </view>
+
+      <view class="modal-footer">
+        <button class="btn-secondary" bindtap="closeForm">取消</button>
+        <button class="btn-primary" bindtap="submitForm" loading="{{saving}}">保存</button>
+      </view>
+    </view>
+  </view>
+</view>

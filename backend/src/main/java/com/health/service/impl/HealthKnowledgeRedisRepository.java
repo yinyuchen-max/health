@@ -108,24 +108,25 @@ public class HealthKnowledgeRedisRepository {
         if (!Boolean.TRUE.equals(locked)) {
             log.info("另一个实例正在构建向量索引，等待完成...");
             waitForRebuild();
+            // 向量只存于各实例 JVM 内存，分布式锁只保护 Redis 版本元数据。
+            // 等待结束后若本实例仍无本地 store，必须自行构建，
+            // 否则本实例的向量检索将永远不可用（多实例部署时尤其重要）。
+            if (activeStore == null) {
+                try {
+                    activeStore = buildStore(segments);
+                    log.info("本实例已构建本地向量存储，包含 {} 个文档", segments.size());
+                } catch (Exception e) {
+                    log.warn("本地向量存储构建失败: {}", e.getMessage());
+                }
+            }
             return;
         }
 
         try {
             log.info("开始构建新的向量版本: {}", newVersion);
 
-            // 创建内存向量存储
-            InMemoryEmbeddingStore<TextSegment> newStore = new InMemoryEmbeddingStore<>();
-
-            // 嵌入并存储所有文本段
-            if (!segments.isEmpty()) {
-                List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
-                List<String> ids = new ArrayList<>();
-                for (int i = 0; i < segments.size(); i++) {
-                    ids.add("doc-" + i);
-                }
-                newStore.addAll(ids, embeddings, segments);
-            }
+            // 创建并填充内存向量存储
+            InMemoryEmbeddingStore<TextSegment> newStore = buildStore(segments);
 
             // 原子性地切换到新版本
             activateVersion(newVersion, sourceHash);
@@ -144,6 +145,16 @@ public class HealthKnowledgeRedisRepository {
             // 释放锁
             releaseLock(lockKey, lockToken);
         }
+    }
+
+    /**
+     * 判断是否需要重建向量索引：
+     * 本地 store 缺失（如应用重启后，向量只存 JVM 内存）或源文档哈希变化时都需要重建。
+     * 注意：不能只依赖 isSourceChanged —— 重启后 Redis 中的 source-hash 未变，
+     * 但本地 store 已丢失，若只检查哈希会导致向量检索永久静默失效。
+     */
+    public boolean needsRebuild(String currentHash) {
+        return activeStore == null || isSourceChanged(currentHash);
     }
 
     /**
@@ -168,6 +179,22 @@ public class HealthKnowledgeRedisRepository {
     }
 
     // ==================== 私有方法 ====================
+
+    /**
+     * 嵌入全部文本段并构建内存向量存储
+     */
+    private InMemoryEmbeddingStore<TextSegment> buildStore(List<TextSegment> segments) {
+        InMemoryEmbeddingStore<TextSegment> newStore = new InMemoryEmbeddingStore<>();
+        if (!segments.isEmpty()) {
+            List<Embedding> embeddings = embeddingModel.embedAll(segments).content();
+            List<String> ids = new ArrayList<>();
+            for (int i = 0; i < segments.size(); i++) {
+                ids.add("doc-" + i);
+            }
+            newStore.addAll(ids, embeddings, segments);
+        }
+        return newStore;
+    }
 
     private void activateVersion(String version, String sourceHash) {
         String versionKey = properties.key("active-version");

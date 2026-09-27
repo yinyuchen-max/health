@@ -1,0 +1,153 @@
+.page {
+  padding: 24rpx;
+  padding-bottom: 140rpx;
+  background: #f5f3ff;
+  min-height: 100vh;
+}
+
+/* 工具栏 */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.toolbar-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #1f2937;
+}
+
+.btn-add-record {
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  color: #fff;
+  font-size: 26rpx;
+  padding: 10rpx 28rpx;
+  border-radius: 30rpx;
+  border: none;
+  line-height: 1.6;
+  box-shadow: 0 4rpx 12rpx rgba(124, 58, 237, 0.3);
+}
+
+/* 数据概览 */
+.overview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.overview-item {
+  width: calc(50% - 6rpx);
+  padding: 20rpx;
+  border-radius: 16rpx;
+  background: #fff;
+  box-shadow: 0 2rpx 8rpx rgba(139, 92, 246, 0.06);
+  text-align: center;
+}
+
+.overview-label {
+  font-size: 22rpx;
+  color: #9ca3af;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.overview-value {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #1f2937;
+  display: block;
+}
+
+.overview-unit {
+  font-size: 20rpx;
+  color: #9ca3af;
+  display: block;
+  margin-top: 4rpx;
+}
+
+/* 区域标题 */
+.section-header {
+  margin: 20rpx 0 16rpx;
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #1f2937;
+}
+
+/* 记录卡片 */
+.record-card {
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+  border-radius: 20rpx;
+  background: #fff;
+  box-shadow: 0 2rpx 12rpx rgba(139, 92, 246, 0.06);
+}
+
+.record-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+  padding-bottom: 12rpx;
+  border-bottom: 1rpx solid #f3f0ff;
+}
+
+.record-date {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.record-actions {
+  display: flex;
+  gap: 16rpx;
+}
+
+.action-edit {
+  font-size: 24rpx;
+  color: #7c3aed;
+}
+
+.action-delete {
+  font-size: 24rpx;
+  color: #ef4444;
+}
+
+.record-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.record-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.record-label {
+  font-size: 26rpx;
+  color: #9ca3af;
+}
+
+.record-value {
+  font-size: 26rpx;
+  color: #374151;
+  font-weight: 500;
+}
+
+.record-notes {
+  margin-top: 8rpx;
+  padding-top: 12rpx;
+  border-top: 1rpx dashed #ede9fe;
+}
+
+.record-notes-text {
+  font-size: 24rpx;
+  color: #6b7280;
+  line-height: 1.6;
+}

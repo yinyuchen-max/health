@@ -10,6 +10,8 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
@@ -75,8 +77,8 @@ public class HealthKnowledgeRagServiceImpl implements HealthKnowledgeRagService 
     private List<String> vectorRetrieve(String query) {
         String currentHash = sha256(markdown);
 
-        // 检查是否需要重建索引
-        if (redisRepository.isSourceChanged(currentHash)) {
+        // 本地 store 缺失（如重启后）或源文档变化时重建索引
+        if (redisRepository.needsRebuild(currentHash)) {
             List<TextSegment> segments = chunks.stream()
                     .map(TextSegment::from)
                     .toList();
@@ -85,11 +87,46 @@ public class HealthKnowledgeRagServiceImpl implements HealthKnowledgeRagService 
 
         // 执行向量搜索
         if (!redisRepository.hasActiveStore()) {
+            log.warn("向量存储不可用，本次检索降级为关键词匹配（请检查 embedding 服务与 Redis 状态）");
             return List.of();
         }
 
         Embedding queryEmbedding = embeddingModel.embed(query).content();
         return redisRepository.search(queryEmbedding, MAX_SNIPPETS, MIN_SCORE);
+    }
+
+    /**
+     * 应用启动后异步预热向量索引：
+     * 1) 避免首个用户请求同步承担全量 embedding 构建的耗时与费用；
+     * 2) 修复重启后向量检索静默失效 —— 即使 Redis 中 source-hash 未变，
+     *    本地 store 丢失时也会在启动阶段自动重建。
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void warmUpVectorIndex() {
+        if (chunks.isEmpty()) {
+            log.warn("RAG 知识文档为空，跳过向量索引预热");
+            return;
+        }
+        Thread warmUp = new Thread(() -> {
+            try {
+                String currentHash = sha256(markdown);
+                if (redisRepository.needsRebuild(currentHash)) {
+                    List<TextSegment> segments = chunks.stream()
+                            .map(TextSegment::from)
+                            .toList();
+                    redisRepository.buildAndActivate(segments, currentHash);
+                }
+                if (redisRepository.hasActiveStore()) {
+                    log.info("RAG 向量索引预热完成（{} 个知识片段）", chunks.size());
+                } else {
+                    log.warn("RAG 向量索引预热未成功，将在首次检索请求时重试");
+                }
+            } catch (Exception e) {
+                log.warn("RAG 向量索引预热失败，将在首次检索请求时重试: {}", e.getMessage());
+            }
+        }, "rag-index-warmup");
+        warmUp.setDaemon(true);
+        warmUp.start();
     }
 
     private static String loadKnowledgeDocument() {

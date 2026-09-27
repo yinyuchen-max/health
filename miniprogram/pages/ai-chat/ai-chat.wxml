@@ -1,0 +1,59 @@
+<view class="chat-page">
+  <!-- 消息列表 -->
+  <scroll-view
+    class="chat-scroll"
+    scroll-y
+    scroll-into-view="{{scrollToView}}"
+    scroll-with-animation
+  >
+    <!-- 欢迎页 -->
+    <view wx:if="{{messages.length === 0}}" class="welcome">
+      <view class="welcome-orb">🤖</view>
+      <text class="welcome-title">你好，我是你的 AI 健康顾问</text>
+      <text class="welcome-sub">可以问我任何健康问题，也可以点下面的快捷问题开始</text>
+      <view class="quick-grid">
+        <view wx:for="{{quickQuestions}}" wx:key="text" class="quick-card" bindtap="sendQuick" data-text="{{item.text}}">
+          <text class="quick-icon">{{item.icon}}</text>
+          <text class="quick-text">{{item.text}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 消息 -->
+    <view wx:for="{{messages}}" wx:key="index" id="msg-{{index}}" class="msg-row {{item.role}}">
+      <block wx:if="{{item.role === 'assistant'}}">
+        <view class="avatar assistant-avatar">🤖</view>
+        <view class="bubble assistant-bubble">
+          <text wx:if="{{item.streaming && !item.content}}" class="typing-dots">
+            <text class="dot"></text><text class="dot"></text><text class="dot"></text>
+          </text>
+          <text wx:else class="bubble-text">{{item.content}}</text>
+        </view>
+      </block>
+      <block wx:else>
+        <view class="bubble user-bubble">{{item.content}}</view>
+        <view class="avatar user-avatar">我</view>
+      </block>
+    </view>
+
+    <view style="height: 20rpx;"></view>
+  </scroll-view>
+
+  <!-- 底部输入区 -->
+  <view class="chat-footer">
+    <view class="input-wrap">
+      <input
+        class="chat-input"
+        value="{{inputText}}"
+        bindinput="onInput"
+        bindconfirm="sendMessage"
+        placeholder="输入你的健康问题…"
+        disabled="{{loading}}"
+        confirm-type="send"
+      />
+      <view wx:if="{{loading}}" class="btn-stop" bindtap="stopStreaming">停止</view>
+      <view wx:else class="btn-send {{inputText ? 'active' : ''}}" bindtap="sendMessage">发送</view>
+    </view>
+    <text class="input-hint">内容由 AI 生成，仅供参考</text>
+  </view>
+</view>

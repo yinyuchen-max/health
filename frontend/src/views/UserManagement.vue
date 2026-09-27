@@ -3,7 +3,9 @@
     <el-card class="management-card fade-in">
       <div class="card-header">
         <h3>
-          <el-icon :size="24" color="#409EFF"><UserFilled /></el-icon>
+          <span class="header-icon-box">
+            <el-icon :size="22" color="#3B82F6"><UserFilled /></el-icon>
+          </span>
           用户管理
         </h3>
         <p class="subtitle">管理系统用户账号状态</p>
@@ -243,48 +245,58 @@ onMounted(() => {
 
 <style scoped>
 .user-management {
+  max-width: 1200px;
+  margin: 0 auto;
   padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
 }
 
 .management-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
+  background: #fff;
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  border: 1px solid #F0F4F8;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
 }
 
 .card-header {
-  padding: 20px;
-  border-bottom: 2px solid #f0f0f0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  padding: 20px 24px;
+  border-bottom: 1px solid #F0F4F8;
+  background: #fff;
 }
 
 .card-header h3 {
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 24px;
+  font-size: 20px;
+  color: #1E293B;
+}
+
+.header-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .subtitle {
   margin: 0;
-  opacity: 0.9;
+  color: #64748B;
   font-size: 14px;
 }
 
 .filter-section {
-  padding: 20px;
+  padding: 20px 24px;
   display: flex;
   gap: 15px;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background: #F8FAFC;
+  border-bottom: 1px solid #F0F4F8;
 }
 
 .search-input {
@@ -297,15 +309,15 @@ onMounted(() => {
 }
 
 .user-table {
-  margin: 20px;
-  width: calc(100% - 40px);
+  margin: 20px 24px;
+  width: calc(100% - 48px);
 }
 
 .pagination-container {
-  padding: 20px;
+  padding: 16px 24px;
   display: flex;
   justify-content: flex-end;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid #F0F4F8;
 }
 
 .fade-in {

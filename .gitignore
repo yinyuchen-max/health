@@ -1,3 +1,4 @@
 .env
-health/backend/src/main/resources/application.yml
+backend/src/main/resources/application.yml
+
 

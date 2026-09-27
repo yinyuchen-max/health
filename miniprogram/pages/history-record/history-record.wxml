@@ -1,0 +1,37 @@
+<view class="page">
+  <!-- 筛选栏 -->
+  <view class="filter-bar card">
+    <picker bindchange="onTypeChange" value="{{typeIndex}}" range="{{typeOptions}}">
+      <view class="filter-item">
+        <text>{{typeOptions[typeIndex]}}</text>
+        <text class="arrow">▼</text>
+      </view>
+    </picker>
+    <picker mode="date" bindchange="onStartDateChange" value="{{startDate}}">
+      <view class="filter-item">
+        <text>{{startDate || '开始日期'}}</text>
+      </view>
+    </picker>
+    <picker mode="date" bindchange="onEndDateChange" value="{{endDate}}">
+      <view class="filter-item">
+        <text>{{endDate || '结束日期'}}</text>
+      </view>
+    </picker>
+  </view>
+
+  <!-- 记录列表 -->
+  <view class="list-container">
+    <view class="record-card card" wx:for="{{records}}" wx:key="id">
+      <view class="record-header">
+        <text class="record-type type-{{item.type}}">{{typeLabels[item.type] || item.type}}</text>
+        <text class="record-date">{{item.recordDate}}</text>
+      </view>
+      <view class="record-title">{{item.title}}</view>
+      <view class="record-content">{{item.content}}</view>
+    </view>
+
+    <view class="empty-tip" wx:if="{{records.length === 0 && !loading}}">
+      <text>暂无历史记录</text>
+    </view>
+  </view>
+</view>

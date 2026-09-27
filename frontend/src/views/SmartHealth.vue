@@ -2,10 +2,15 @@
   <div class="smart-health-page">
     <el-card class="page-hero">
       <div class="page-hero-content">
-        <div>
-          <p class="hero-kicker">Smart Health Center</p>
-          <h2>智能健康中心</h2>
-          <p>基于真实健康记录和运动记录生成风险评分、恢复状态与个性化建议，帮助快速判断本周重点。</p>
+        <div class="hero-left">
+          <div class="hero-icon-box">
+            <el-icon :size="28" color="#0d9488"><Opportunity /></el-icon>
+          </div>
+          <div>
+            <p class="hero-kicker">Smart Health Center</p>
+            <h2>智能健康中心</h2>
+            <p class="hero-desc">基于真实健康记录和运动记录生成风险评分、恢复状态与个性化建议，帮助快速判断本周重点。</p>
+          </div>
         </div>
         <el-button type="primary" @click="refreshData">刷新分析</el-button>
       </div>
@@ -167,6 +172,7 @@ import request from '../utils/request'
 import { useUserStore } from '../store/user'
 import { useAnalyticsStore } from '../store/analytics'
 import { ElMessage } from 'element-plus'
+import { Opportunity } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const analyticsStore = useAnalyticsStore()
@@ -478,12 +484,68 @@ onBeforeUnmount(() => {
   gap: 16px;
 }
 
+/* Hero */
+.page-hero {
+  border: none;
+  background: #fff;
+  border-radius: 16px;
+}
+
+.page-hero-content {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.hero-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.hero-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: #0d948818;
+  flex-shrink: 0;
+}
+
+.hero-kicker {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #0d9488;
+  font-weight: 600;
+}
+
+.page-hero-content h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: #1E293B;
+}
+
+.hero-desc {
+  margin: 0;
+  color: #64748B;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Analysis Loading */
 .analysis-loading-card {
   border: none;
   overflow: hidden;
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 36%),
-    linear-gradient(135deg, #eff6ff, #f8fafc 58%, #ecfeff);
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 36%),
+    linear-gradient(135deg, #f8fafc, #fff 58%, #f0fdfa);
+  border-radius: 16px;
 }
 
 .analysis-loading-shell {
@@ -495,13 +557,12 @@ onBeforeUnmount(() => {
 
 .analysis-loading-copy,
 .analysis-loading-preview {
-  border-radius: 20px;
+  border-radius: 16px;
 }
 
 .analysis-loading-copy {
   padding: 24px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .analysis-loading-eyebrow {
@@ -558,8 +619,8 @@ onBeforeUnmount(() => {
 
 .analysis-loading-preview {
   padding: 22px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid #F0F4F8;
+  background: #F8FAFC;
 }
 
 .analysis-loading-preview-header {
@@ -587,44 +648,20 @@ onBeforeUnmount(() => {
     transform: scale(1);
     box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
   }
-
   70% {
     transform: scale(1.05);
     box-shadow: 0 0 0 12px rgba(34, 197, 94, 0);
   }
-
   100% {
     transform: scale(1);
     box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
   }
 }
 
-.page-hero {
-  border: none;
-  background:
-    linear-gradient(135deg, rgba(13, 148, 136, 0.95), rgba(14, 116, 144, 0.92)),
-    linear-gradient(135deg, #0f766e, #155e75);
-  color: #fff;
-}
-
-.page-hero-content {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.hero-kicker {
-  margin: 0 0 8px;
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  opacity: 0.78;
-}
-
+/* Charts & Panels */
 .chart-card {
   min-height: 420px;
+  border-radius: 16px;
 }
 
 .chart {
@@ -640,6 +677,10 @@ onBeforeUnmount(() => {
 
 .card-header {
   font-weight: 600;
+  color: #1E293B;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .risk-list {
@@ -650,12 +691,13 @@ onBeforeUnmount(() => {
 
 .panel-card {
   padding: 16px;
-  border-radius: 16px;
-  background: linear-gradient(180deg, #f8fafc, #eef6ff);
+  border-radius: 12px;
+  background: #F8FAFC;
+  border: 1px solid #F0F4F8;
 }
 
 .panel-card.solid {
-  background: #f8fafc;
+  background: #F8FAFC;
 }
 
 .risk-header,
@@ -673,25 +715,23 @@ onBeforeUnmount(() => {
 .panel-card p {
   margin: 0 0 10px;
   line-height: 1.6;
-  color: #475569;
+  color: #64748B;
 }
 
 .panel-card ul {
   margin: 0;
   padding-left: 18px;
-  color: #334155;
+  color: #475569;
 }
 
 @media (max-width: 960px) {
   .analysis-loading-shell {
     grid-template-columns: 1fr;
   }
-
   .analysis-loading-copy,
   .analysis-loading-preview {
     padding: 18px;
   }
-
   .analysis-loading-title-row h3 {
     font-size: 22px;
   }
@@ -704,36 +744,32 @@ onBeforeUnmount(() => {
     align-items: flex-start;
     gap: 14px;
   }
-
+  .hero-left {
+    flex-direction: column;
+    align-items: flex-start;
+  }
   .page-hero-content h2 {
     font-size: 20px;
   }
-
-  .page-hero-content p {
+  .hero-desc {
     font-size: 13px;
   }
-
   .chart-card {
     min-height: auto;
   }
-
   .chart {
     height: 240px;
   }
-
   .risk-list {
     grid-template-columns: 1fr;
   }
-
   .panel-card {
     padding: 14px;
   }
-
   .panel-card ul {
     padding-left: 14px;
     font-size: 13px;
   }
-
   .card-header {
     font-size: 14px;
   }

@@ -7,16 +7,12 @@ import com.health.common.utils.SecurityUtil;
 import com.health.common.exception.ForbiddenException;
 import com.health.domain.dto.DoctorFullRegisterDTO;
 import com.health.domain.dto.DoctorRegisterDTO;
-import com.health.domain.dto.UserRegisterDTO;
 import com.health.domain.entity.DoctorAppointment;
 import com.health.domain.vo.DoctorVO;
 import com.health.service.DoctorAppointmentService;
 import com.health.service.DoctorService;
-import com.health.service.UserService;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,73 +24,12 @@ public class DoctorController {
 
     private final DoctorService doctorService;
     private final DoctorAppointmentService doctorAppointmentService;
-    private final UserService userService;
     private final SecurityUtil securityUtil;
-    private final JdbcTemplate jdbcTemplate;
 
-    public DoctorController(DoctorService doctorService, DoctorAppointmentService doctorAppointmentService, UserService userService, SecurityUtil securityUtil, JdbcTemplate jdbcTemplate) {
+    public DoctorController(DoctorService doctorService, DoctorAppointmentService doctorAppointmentService, SecurityUtil securityUtil) {
         this.doctorService = doctorService;
         this.doctorAppointmentService = doctorAppointmentService;
-        this.userService = userService;
         this.securityUtil = securityUtil;
-        this.jdbcTemplate = jdbcTemplate;
-    }
-
-    @PostConstruct
-    public void ensureTablesExist() {
-        jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS doctor (
-                    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    real_name VARCHAR(50) NOT NULL,
-                    hospital VARCHAR(100) NOT NULL,
-                    department VARCHAR(50) NOT NULL,
-                    title VARCHAR(30) DEFAULT NULL,
-                    specialization VARCHAR(200) DEFAULT NULL,
-                    license_number VARCHAR(50) NOT NULL,
-                    introduction TEXT,
-                    status ENUM('pending','approved','rejected') DEFAULT 'pending',
-                    reject_reason VARCHAR(500) DEFAULT NULL,
-                    approved_by BIGINT DEFAULT NULL,
-                    approved_at DATETIME DEFAULT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    deleted TINYINT DEFAULT 0,
-                    UNIQUE KEY uk_user_id (user_id),
-                    INDEX idx_status (status),
-                    INDEX idx_department (department),
-                    CONSTRAINT doctor_ibfk_1 FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE CASCADE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='医生信息表'
-                """);
-        jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS doctor_message (
-                    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                    doctor_id BIGINT NOT NULL,
-                    user_id BIGINT NOT NULL,
-                    sender_id BIGINT NOT NULL,
-                    sender_type ENUM('user','doctor') NOT NULL,
-                    content TEXT NOT NULL,
-                    is_read TINYINT(1) DEFAULT 0,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    deleted TINYINT DEFAULT 0,
-                    INDEX idx_doctor_user (doctor_id, user_id),
-                    INDEX idx_sender (sender_id, sender_type),
-                    INDEX idx_created_at (created_at),
-                    CONSTRAINT doctor_message_ibfk_1 FOREIGN KEY (doctor_id) REFERENCES doctor(id) ON DELETE CASCADE,
-                    CONSTRAINT doctor_message_ibfk_2 FOREIGN KEY (user_id) REFERENCES sys_user(id) ON DELETE CASCADE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='医患对话消息表'
-                """);
-        // 添加预约表的 doctor_id 和 status 字段（IF NOT EXISTS 语法不适用 ALTER，用 try-catch）
-        try {
-            jdbcTemplate.execute("""
-                    ALTER TABLE doctor_appointment
-                        ADD COLUMN doctor_id BIGINT DEFAULT NULL COMMENT '医生ID' AFTER department,
-                        ADD COLUMN status ENUM('pending','confirmed','completed','cancelled') DEFAULT 'pending' COMMENT '预约状态' AFTER doctor_id,
-                        ADD INDEX idx_doctor_id (doctor_id)
-                    """);
-        } catch (Exception ignored) {
-            // 字段已存在则忽略
-        }
     }
 
     /**
@@ -113,38 +48,42 @@ public class DoctorController {
         return Result.success(doctorAppointmentService.list(qw));
     }
 
+    /**
+     * 患者创建预约
+     */
+    @PostMapping("/appointment")
+    @RateLimit(key = "create-appointment", maxRequests = 10, timeWindow = 1, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.USER)
+    public Result<DoctorAppointment> createAppointment(@RequestBody DoctorAppointment appointment) {
+        Long userId = securityUtil.getCurrentUserId();
+        appointment.setUserId(userId);
+        appointment.setStatus("pending");
+        doctorAppointmentService.save(appointment);
+        return Result.success(appointment);
+    }
+
+    /**
+     * 获取当前用户的预约列表
+     */
+    @GetMapping("/my-patient-appointments")
+    public Result<List<DoctorAppointment>> getMyPatientAppointments() {
+        Long userId = securityUtil.getCurrentUserId();
+        QueryWrapper<DoctorAppointment> qw = new QueryWrapper<>();
+        qw.eq("user_id", userId);
+        qw.orderByDesc("appointment_time");
+        return Result.success(doctorAppointmentService.list(qw));
+    }
+
     // ============ 公开接口 ============
 
     /**
      * 医生完整注册（无需登录）：创建账号 + 提交医生申请
+     * 编排下沉到 DoctorService.fullRegister 的单个事务中，
+     * 任一步失败整体回滚，不会留下无申请的孤儿账号
      */
     @PostMapping("/full-register")
     @RateLimit(key = "doctor-full-register", maxRequests = 2, timeWindow = 10, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.IP)
     public Result<DoctorVO> fullRegister(@RequestBody @Valid DoctorFullRegisterDTO dto) {
-        // 1. 创建用户账号
-        UserRegisterDTO userDto = new UserRegisterDTO();
-        userDto.setUsername(dto.getUsername());
-        userDto.setPassword(dto.getPassword());
-        userDto.setEmail(dto.getEmail());
-        userDto.setPhone(dto.getPhone());
-        userService.register(userDto);
-
-        // 2. 获取新创建用户的ID
-        var user = userService.getUserInfoByUsername(dto.getUsername());
-        Long userId = user.getId();
-
-        // 3. 创建医生申请
-        DoctorRegisterDTO doctorDto = new DoctorRegisterDTO();
-        doctorDto.setRealName(dto.getRealName());
-        doctorDto.setHospital(dto.getHospital());
-        doctorDto.setDepartment(dto.getDepartment());
-        doctorDto.setTitle(dto.getTitle());
-        doctorDto.setSpecialization(dto.getSpecialization());
-        doctorDto.setLicenseNumber(dto.getLicenseNumber());
-        doctorDto.setIntroduction(dto.getIntroduction());
-        DoctorVO doctorVO = doctorService.registerAsDoctor(userId, doctorDto);
-
-        return Result.success(doctorVO);
+        return Result.success(doctorService.fullRegister(dto));
     }
 
     /**

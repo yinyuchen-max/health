@@ -17,6 +17,7 @@ public class User {
     private String password;
     private String email;
     private String phone;
+    private String wechatOpenid; // 微信小程序 openid
     private Integer gender; // 1-男, 2-女
     private Integer age;
     private Double height; // cm

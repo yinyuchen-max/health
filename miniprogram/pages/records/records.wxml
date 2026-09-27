@@ -1,0 +1,88 @@
+<view class="page">
+  <!-- 月份选择 -->
+  <view class="month-bar card">
+    <text class="month-text">{{currentMonth}}</text>
+    <view class="week-row">
+      <text class="week-day" wx:for="{{weekDays}}" wx:key="*this">{{item}}</text>
+    </view>
+    <view class="day-row">
+      <view class="day-item {{item === today ? 'day-today' : ''}} {{item === selectedDay ? 'day-selected' : ''}}"
+            wx:for="{{daysInMonth}}" wx:key="*this"
+            bindtap="selectDay" data-day="{{item}}">
+        <text>{{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 今日记录 -->
+  <view class="section-header">
+    <text class="section-title">今日记录</text>
+  </view>
+
+  <!-- 饮食记录卡片 -->
+  <view class="record-card card" bindtap="goDietRecord">
+    <view class="record-card-left">
+      <text class="record-card-title">饮食记录</text>
+      <text class="record-card-sub">已记录 {{dietCount}} 餐</text>
+      <text class="record-card-sub record-card-cal">{{dietCalories}} 千卡</text>
+    </view>
+    <text class="record-card-emoji"></text>
+  </view>
+
+  <!-- 运动记录卡片 -->
+  <view class="record-card card" bindtap="goSportRecord">
+    <view class="record-card-left">
+      <text class="record-card-title">运动记录</text>
+      <text class="record-card-sub">运动 {{sportMinutes}} 分钟</text>
+      <text class="record-card-sub record-card-cal">{{sportCalories}} 千卡</text>
+    </view>
+    <text class="record-card-emoji">‍️</text>
+  </view>
+
+  <!-- 睡眠记录卡片 -->
+  <view class="record-card card" bindtap="goSleepRecord">
+    <view class="record-card-left">
+      <text class="record-card-title">睡眠记录</text>
+      <text class="record-card-sub">睡眠 {{sleepHours}}小时{{sleepMinutes}}分</text>
+      <text class="record-card-sub record-card-cal">睡眠质量 {{sleepQuality || '良好'}}</text>
+    </view>
+    <text class="record-card-emoji">🌙</text>
+  </view>
+
+  <!-- 体重记录卡片 -->
+  <view class="record-card card" bindtap="goHealthRecord">
+    <view class="record-card-left">
+      <text class="record-card-title">体重记录</text>
+      <text class="record-card-sub">体重 {{latestWeight || '--'}} 公斤</text>
+      <text class="record-card-sub record-card-cal">BMI {{latestBmi || '--'}}</text>
+    </view>
+    <text class="record-card-emoji">⚖️</text>
+  </view>
+
+  <!-- 悬浮添加按钮 -->
+  <view class="fab-btn" bindtap="showAddMenu">
+    <text class="fab-icon">+</text>
+  </view>
+
+  <!-- 添加菜单弹窗 -->
+  <view class="modal-mask" wx:if="{{showAddMenu}}" bindtap="hideAddMenu">
+    <view class="add-menu" catchtap="">
+      <view class="add-menu-item" bindtap="goDietRecord">
+        <text class="add-menu-emoji"></text>
+        <text class="add-menu-text">饮食</text>
+      </view>
+      <view class="add-menu-item" bindtap="goSportRecord">
+        <text class="add-menu-emoji">🏃</text>
+        <text class="add-menu-text">运动</text>
+      </view>
+      <view class="add-menu-item" bindtap="goSleepRecord">
+        <text class="add-menu-emoji">😴</text>
+        <text class="add-menu-text">睡眠</text>
+      </view>
+      <view class="add-menu-item" bindtap="goHealthRecord">
+        <text class="add-menu-emoji">⚖️</text>
+        <text class="add-menu-text">体重</text>
+      </view>
+    </view>
+  </view>
+</view>

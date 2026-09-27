@@ -1,0 +1,50 @@
+<view class="page">
+  <view class="card">
+    <view class="form-item">
+      <text class="form-label">身高</text>
+      <view class="input-row">
+        <input class="form-input" type="digit" placeholder="请输入身高" value="{{height}}" bindinput="onHeightInput" />
+        <text class="input-unit">cm</text>
+      </view>
+    </view>
+
+    <view class="form-item">
+      <text class="form-label">体重</text>
+      <view class="input-row">
+        <input class="form-input" type="digit" placeholder="请输入体重" value="{{weight}}" bindinput="onWeightInput" />
+        <text class="input-unit">kg</text>
+      </view>
+    </view>
+
+    <button class="btn-primary" bindtap="calcBMI">计算 BMI</button>
+  </view>
+
+  <!-- 结果展示 -->
+  <view class="card result-card" wx:if="{{bmiResult}}">
+    <text class="result-label">你的BMI</text>
+    <text class="result-value {{bmiLevelClass}}">{{bmiResult}}</text>
+    <text class="result-level {{bmiLevelClass}}">{{bmiLevel}}</text>
+
+    <!-- BMI 标尺 -->
+    <view class="bmi-scale">
+      <view class="scale-bar">
+        <view class="scale-fill" style="left: {{scalePosition}}%"></view>
+      </view>
+      <view class="scale-labels">
+        <text class="scale-label">偏瘦</text>
+        <text class="scale-label">正常</text>
+        <text class="scale-label">偏胖</text>
+        <text class="scale-label">肥胖</text>
+      </view>
+      <view class="scale-values">
+        <text class="scale-value">18.5</text>
+        <text class="scale-value">24</text>
+        <text class="scale-value">28</text>
+      </view>
+    </view>
+
+    <text class="result-desc">BMI是衡量身体胖瘦程度的指标</text>
+    <text class="result-desc">BMI = 体重(kg) / 身高²(m²)</text>
+    <text class="result-desc">成人的BMI数值：18.5-24为正常范围</text>
+  </view>
+</view>

@@ -1,0 +1,25 @@
+<view class="login-page">
+  <!-- Logo 区域 -->
+  <view class="logo-section">
+    <view class="logo-icon">🏥</view>
+    <text class="logo-title">健康管理系统</text>
+    <text class="logo-subtitle">科学管理您的健康数据</text>
+  </view>
+
+  <!-- 微信一键登录 -->
+  <view class="wx-login-section">
+    <button class="wx-login-btn" bindtap="handleWxLogin" loading="{{wxLoading}}">
+      <text class="wx-icon">微信</text>
+      <text>微信一键登录</text>
+    </button>
+    <text class="login-tip">首次登录将自动创建账号</text>
+  </view>
+
+  <!-- 底部提示 -->
+  <view class="footer">
+    <text class="text-muted">登录即表示同意</text>
+    <text class="text-primary">《用户协议》</text>
+    <text class="text-muted">和</text>
+    <text class="text-primary">《隐私政策》</text>
+  </view>
+</view>

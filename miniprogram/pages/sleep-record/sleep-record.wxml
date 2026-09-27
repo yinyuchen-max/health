@@ -1,0 +1,80 @@
+<view class="page">
+  <!-- 日期选择 -->
+  <view class="date-bar card">
+    <text class="date-text">{{selectedDate}}</text>
+    <picker mode="date" bindchange="onDateChange" value="{{selectedDate}}">
+      <text class="date-picker">切换日期</text>
+    </picker>
+  </view>
+
+  <!-- 睡眠时长卡片 -->
+  <view class="sleep-card card">
+    <text class="sleep-label">睡眠时长</text>
+    <view class="sleep-body">
+      <view class="sleep-time-wrap">
+        <text class="sleep-hours">{{sleepHours || 7}}</text>
+        <text class="sleep-unit1">小时</text>
+        <text class="sleep-minutes">{{sleepMinutes || 20}}</text>
+        <text class="sleep-unit2">分钟</text>
+      </view>
+      <text class="sleep-moon">🌙</text>
+    </view>
+    <view class="sleep-quality-row">
+      <text class="sleep-quality-label">睡眠质量</text>
+      <view class="sleep-quality-tags">
+        <view class="sleep-quality-tag {{sleepQuality === item ? 'sleep-quality-active' : ''}}"
+              wx:for="{{qualityOptions}}" wx:key="*this"
+              bindtap="selectQuality" data-quality="{{item}}">
+          {{item}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 入睡/起床时间 -->
+  <view class="time-cards">
+    <view class="time-card card">
+      <text class="time-label">入睡</text>
+      <picker mode="time" value="{{bedTime}}" bindchange="onBedTimeChange">
+        <text class="time-value">{{bedTime || '23:00'}}</text>
+      </picker>
+    </view>
+    <view class="time-card card">
+      <text class="time-label">起床</text>
+      <picker mode="time" value="{{wakeTime}}" bindchange="onWakeTimeChange">
+        <text class="time-value">{{wakeTime || '07:00'}}</text>
+      </picker>
+    </view>
+  </view>
+
+  <!-- 睡眠阶段 -->
+  <view class="card">
+    <text class="section-title">睡眠阶段</text>
+    <view class="sleep-phases">
+      <view class="phase-item">
+        <view class="phase-bar phase-deep" style="width: {{deepPercent}}%"></view>
+        <text class="phase-label">深睡 {{deepHours}}h{{deepMinutes}}m</text>
+      </view>
+      <view class="phase-item">
+        <view class="phase-bar phase-light" style="width: {{lightPercent}}%"></view>
+        <text class="phase-label">浅睡 {{lightHours}}h{{lightMinutes}}m</text>
+      </view>
+      <view class="phase-item">
+        <view class="phase-bar phase-rem" style="width: {{remPercent}}%"></view>
+        <text class="phase-label">REM {{remHours}}h{{remMinutes}}m</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 睡眠建议 -->
+  <view class="card">
+    <text class="section-title">睡眠建议</text>
+    <view class="sleep-tips">
+      <text class="sleep-tip">保持规律的作息时间有助于提高睡眠质量</text>
+      <text class="sleep-tip">建议每天固定时间睡觉和起床</text>
+    </view>
+  </view>
+
+  <!-- 保存按钮 -->
+  <button class="btn-primary" bindtap="saveSleep">保存睡眠记录</button>
+</view>

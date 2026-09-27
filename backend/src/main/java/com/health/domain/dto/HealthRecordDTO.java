@@ -13,10 +13,8 @@ public class HealthRecordDTO {
 
     private Double bloodPressureSystolic;
     private Double bloodPressureDiastolic;
-    @NotNull(message = "心率不能为空")
     private Integer heartRate;
     private BigDecimal bloodSugar;
-    @NotNull(message = "体重不能为空")
     private Double weight;
 
     @NotBlank(message = "记录日期不能为空")

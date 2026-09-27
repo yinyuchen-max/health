@@ -1,0 +1,82 @@
+<view class="page">
+  <view class="card">
+    <text class="page-title">设置目标</text>
+
+    <!-- 每日步数目标 -->
+    <view class="goal-item">
+      <view class="goal-left">
+        <text class="goal-emoji">👟</text>
+        <text class="goal-name">每日步数目标</text>
+      </view>
+      <view class="goal-right">
+        <text class="goal-value">{{goals.steps}}</text>
+        <text class="goal-unit">步</text>
+      </view>
+    </view>
+    <slider min="3000" max="20000" step="500" value="{{goals.steps}}"
+            bindchange="onGoalChange" data-field="steps"
+            activeColor="#7c3aed" backgroundColor="#ede9fe" block-size="20" />
+
+    <!-- 每日运动时长 -->
+    <view class="goal-item">
+      <view class="goal-left">
+        <text class="goal-emoji">⏱️</text>
+        <text class="goal-name">每日运动时长</text>
+      </view>
+      <view class="goal-right">
+        <text class="goal-value">{{goals.exerciseMinutes}}</text>
+        <text class="goal-unit">分钟</text>
+      </view>
+    </view>
+    <slider min="10" max="120" step="5" value="{{goals.exerciseMinutes}}"
+            bindchange="onGoalChange" data-field="exerciseMinutes"
+            activeColor="#7c3aed" backgroundColor="#ede9fe" block-size="20" />
+
+    <!-- 每日饮水量 -->
+    <view class="goal-item">
+      <view class="goal-left">
+        <text class="goal-emoji">💧</text>
+        <text class="goal-name">每日饮水量</text>
+      </view>
+      <view class="goal-right">
+        <text class="goal-value">{{goals.waterMl}}</text>
+        <text class="goal-unit">ml</text>
+      </view>
+    </view>
+    <slider min="1000" max="4000" step="100" value="{{goals.waterMl}}"
+            bindchange="onGoalChange" data-field="waterMl"
+            activeColor="#7c3aed" backgroundColor="#ede9fe" block-size="20" />
+
+    <!-- 每日睡眠时长 -->
+    <view class="goal-item">
+      <view class="goal-left">
+        <text class="goal-emoji">😴</text>
+        <text class="goal-name">每日睡眠时长</text>
+      </view>
+      <view class="goal-right">
+        <text class="goal-value">{{goals.sleepHours}}</text>
+        <text class="goal-unit">小时</text>
+      </view>
+    </view>
+    <slider min="5" max="10" step="0.5" value="{{goals.sleepHours}}"
+            bindchange="onGoalChange" data-field="sleepHours"
+            activeColor="#7c3aed" backgroundColor="#ede9fe" block-size="20" />
+
+    <!-- 每日热量摄入 -->
+    <view class="goal-item">
+      <view class="goal-left">
+        <text class="goal-emoji"></text>
+        <text class="goal-name">每日热量摄入</text>
+      </view>
+      <view class="goal-right">
+        <text class="goal-value">{{goals.calories}}</text>
+        <text class="goal-unit">千卡</text>
+      </view>
+    </view>
+    <slider min="1200" max="3000" step="50" value="{{goals.calories}}"
+            bindchange="onGoalChange" data-field="calories"
+            activeColor="#7c3aed" backgroundColor="#ede9fe" block-size="20" />
+  </view>
+
+  <button class="btn-primary" bindtap="saveGoals">保存目标</button>
+</view>
