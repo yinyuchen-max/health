@@ -18,11 +18,18 @@ export default defineConfig({
     }
   },
   build: {
+    // 提高 chunk 体积警告阈值，避免无意义告警
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['vue', 'pinia', 'element-plus'],
-          utils: ['axios']
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            // echarts/zrender 体积大且仅部分页面使用，单独拆包按需加载
+            if (id.includes('echarts') || id.includes('zrender')) return 'echarts'
+            if (id.includes('element-plus') || id.includes('@element-plus')) return 'element-plus'
+            if (id.includes('vue') || id.includes('pinia')) return 'vue-core'
+            return 'vendor'
+          }
         }
       }
     }

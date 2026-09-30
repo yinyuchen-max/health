@@ -154,16 +154,24 @@ const handleLogin = () => {
 
       userStore.setToken(token)
 
-      try {
-        const userInfoResponse = await request.get('/user/info')
-        const responseData = userInfoResponse?.data ?? userInfoResponse
+      // 并行拉取用户信息与医生身份，减少移动端串行等待
+      const [userInfoResult, doctorResult] = await Promise.allSettled([
+        request.get('/user/info'),
+        request.get('/doctor/check')
+      ])
 
-        if (!responseData) {
-          throw new Error('User info is empty')
+      if (userInfoResult.status === 'fulfilled') {
+        const responseData = userInfoResult.value?.data ?? userInfoResult.value
+        if (responseData) {
+          userStore.setUserInfo(responseData)
+        } else {
+          userStore.setUserInfo({
+            username: loginForm.username,
+            email: `${loginForm.username}@health-system.com`,
+            role: loginForm.username === 'admin' ? 'admin' : 'user'
+          })
         }
-
-        userStore.setUserInfo(responseData)
-      } catch (error) {
+      } else {
         userStore.setUserInfo({
           username: loginForm.username,
           email: `${loginForm.username}@health-system.com`,
@@ -177,18 +185,11 @@ const handleLogin = () => {
         showClose: true
       })
 
-      // 判断是否为已审核医生，医生自动进入医生端
-      let isDoctor = false
-      try {
-        const doctorCheck = await request.get('/doctor/check')
-        isDoctor = doctorCheck?.data === true || doctorCheck === true
-      } catch {
-        isDoctor = false
-      }
+      // 判断是否为已审核医生，医生自动进入医生端（立即跳转，不再人为延迟）
+      const isDoctor = doctorResult.status === 'fulfilled' &&
+        (doctorResult.value?.data === true || doctorResult.value === true)
 
-      setTimeout(() => {
-        router.push(isDoctor ? '/doctor/dashboard' : '/app/dashboard')
-      }, 500)
+      router.push(isDoctor ? '/doctor/dashboard' : '/app/dashboard')
     } catch (error) {
       let errorMessage = error?.message || '登录失败'
 
@@ -415,34 +416,43 @@ const handleDoctorRegister = () => {
 @media (max-width: 720px) {
   .login-page {
     padding: 12px;
+    align-items: flex-start;
   }
 
   .login-shell {
     min-height: auto;
     border-radius: 24px;
+    margin-top: 4vh;
   }
 
+  /* 移动端隐藏装饰性动画面板，表单首屏直接可见 */
   .hero-panel {
-    padding: 28px 20px 16px;
-    min-height: 340px;
+    display: none;
   }
 
   .form-panel {
-    padding: 22px 18px 26px;
+    padding: 26px 18px 26px;
   }
 
-  .brand-copy h1,
+  .card-header {
+    margin-bottom: 24px;
+  }
+
   .card-header h2 {
-    font-size: 28px;
+    font-size: 26px;
   }
 
-  .brand-desc,
   .card-header span {
     font-size: 14px;
   }
 
   .actions {
     grid-template-columns: 1fr;
+  }
+
+  /* 触屏点击去掉 hover 阴影，避免点击后样式残留 */
+  .login-button {
+    box-shadow: 0 8px 18px rgba(31, 36, 48, 0.14);
   }
 }
 </style>

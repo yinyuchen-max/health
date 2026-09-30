@@ -1,5 +1,30 @@
 /* ========== 全局移动端响应式适配 ========== */
 
+/* --- 触屏体验基础优化 --- */
+@media (hover: none) and (pointer: coarse) {
+  /* 去掉移动端点击时的灰色高亮闪烁 */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* iOS 输入框字号 <16px 时聚焦会自动放大页面，这里强制 16px */
+  .el-input__inner,
+  .el-textarea__inner {
+    font-size: 16px !important;
+  }
+}
+
+/* 惯性滚动，提升移动端列表滑动体验 */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+.main-content,
+.el-drawer__body,
+.el-table__body-wrapper {
+  -webkit-overflow-scrolling: touch;
+}
+
 /* --- 表格在小屏幕下允许横向滚动 --- */
 @media (max-width: 768px) {
   .el-table {

@@ -311,7 +311,7 @@ const loadRecords = async () => {
   try {
     const userId = userStore.userInfo?.id || 1
     const response = await request.get(`/health/records/${userId}`, {
-      params: { pageNum: 1, pageSize: 1000 }
+      params: { pageNum: 1, pageSize: 200 }
     })
     records.value = (response?.data?.records || []).map(r => ({ ...r, selected: false }))
     analyticsStore.setHealthRecords(records.value, userId)
