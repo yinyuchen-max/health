@@ -83,6 +83,58 @@ class SmartHealthCacheTest {
     }
 
     @Test
+    void emptyRecordsShouldReturnNoticeWithoutModelsCacheOrHistoryLookup() {
+        health.clear();
+        sport.clear();
+        // 即使填了个人体征、保留旧缓存和历史副本，也不能凭空生成报告。
+        cache.data.put("smart:overview:v2:1", "old cached report");
+        HistoryRecord oldHistory = new HistoryRecord();
+        oldHistory.setContent("old health record");
+        history.add(oldHistory);
+
+        SmartHealthOverviewDTO result = service.generateOverview(1L);
+
+        assertEquals("NO_DATA", result.getDataStatus());
+        assertEquals(1L, result.getUserId());
+        assertTrue(result.getMessage().contains("请先添加"));
+        assertNull(result.getGeneratedAt());
+        assertNull(result.getBmi());
+        assertNull(result.getNutritionAdvice());
+        assertNull(result.getExercisePlan());
+        assertNull(result.getSleepInsight());
+        assertNull(result.getStressInsight());
+        assertTrue(result.getRiskAssessments().isEmpty());
+        assertTrue(result.getQuickTips().isEmpty());
+        verifyNoInteractions(model, rag, historyMapper, cache.redis);
+    }
+
+    @Test
+    void deletingAllRecordsShouldHidePreviousReportAndNewRecordShouldEnableGeneration() {
+        assertEquals("AVAILABLE", service.generateOverview(1L).getDataStatus());
+        health.clear();
+        sport.clear();
+        assertEquals("NO_DATA", service.generateOverview(1L).getDataStatus());
+        verify(model).chat(anyString());
+        verify(rag).retrieveRelevantKnowledge(any(), any(), any(), any(), any());
+
+        HealthRecord newRecord = new HealthRecord();
+        newRecord.setId(99L);
+        newRecord.setHeartRate(80);
+        health.add(newRecord);
+        SmartHealthOverviewDTO result = service.generateOverview(1L);
+        assertEquals("AVAILABLE", result.getDataStatus());
+        assertNull(result.getMessage());
+        verify(model, times(2)).chat(anyString());
+    }
+
+    @Test
+    void sportRecordAloneShouldAllowAnalysis() {
+        health.clear();
+        assertEquals("AVAILABLE", service.generateOverview(1L).getDataStatus());
+        verify(model).chat(anyString());
+    }
+
+    @Test
     void unchangedDataShouldReuseOldReportAfterRestartWithoutTtlOrRagCalls() throws Exception {
         service.generateOverview(1L);
         String key = "smart:overview:v2:1";

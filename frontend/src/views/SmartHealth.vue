@@ -12,7 +12,7 @@
             <p class="hero-desc">基于真实健康记录和运动记录生成风险评分、恢复状态与个性化建议，帮助快速判断本周重点。</p>
           </div>
         </div>
-        <el-button type="primary" @click="refreshData">刷新分析</el-button>
+        <el-button type="primary" :loading="loading" @click="refreshData">刷新分析</el-button>
       </div>
     </el-card>
 
@@ -21,11 +21,11 @@
         <div class="analysis-loading-copy">
           <p class="analysis-loading-eyebrow">HEALTH AI PIPELINE</p>
           <div class="analysis-loading-title-row">
-            <h3>AI 大模型分析中</h3>
+            <h3>正在加载健康分析</h3>
             <span class="analysis-loading-pulse"></span>
           </div>
           <p class="analysis-loading-text">
-            正在读取健康记录、运动数据与恢复指标，生成本次智能评估与个性化建议。
+            正在读取健康记录和运动数据，请稍候。
           </p>
           <div class="analysis-loading-tags">
             <span>风险识别</span>
@@ -38,7 +38,7 @@
         <div class="analysis-loading-preview">
           <div class="analysis-loading-preview-header">
             <span>分析进度</span>
-            <strong>模型推理中</strong>
+            <strong>正在加载</strong>
           </div>
           <el-skeleton animated>
             <template #template>
@@ -57,6 +57,9 @@
       </div>
     </el-card>
 
+    <HealthDataNotice v-if="!loading && noData" :message="overview?.message" />
+
+    <template v-if="!loading && overview && !noData">
     <el-row :gutter="16">
       <el-col :xs="24" :xl="14">
         <el-card class="chart-card">
@@ -162,6 +165,7 @@
         </el-card>
       </el-col>
     </el-row>
+    </template>
   </div>
 </template>
 
@@ -173,11 +177,13 @@ import { useUserStore } from '../store/user'
 import { useAnalyticsStore } from '../store/analytics'
 import { ElMessage } from 'element-plus'
 import { Opportunity } from '@element-plus/icons-vue'
+import HealthDataNotice from '../components/HealthDataNotice.vue'
 
 const userStore = useUserStore()
 const analyticsStore = useAnalyticsStore()
 const overview = ref(null)
 const loading = ref(false)
+const noData = computed(() => overview.value?.dataStatus === 'NO_DATA')
 
 const riskChartRef = ref(null)
 const recoveryChartRef = ref(null)
@@ -256,7 +262,7 @@ const levelText = (level) => {
 const ensureChart = (instance, chartRef) => {
   if (instance && instance.getDom() !== chartRef.value) {
     instance.dispose()
-    return null
+    instance = null
   }
   return instance || echarts.init(chartRef.value)
 }
@@ -452,7 +458,14 @@ const refreshData = async () => {
   }
 }
 
-watch([riskData, recoveryMetrics], async () => {
+watch([riskData, recoveryMetrics, loading, noData], async () => {
+  if (loading.value || noData.value) {
+    riskChart?.dispose()
+    recoveryChart?.dispose()
+    riskChart = null
+    recoveryChart = null
+    return
+  }
   await nextTick()
   renderRiskChart()
   renderRecoveryChart()

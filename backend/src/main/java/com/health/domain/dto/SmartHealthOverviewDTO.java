@@ -7,6 +7,9 @@ import java.util.List;
 @Data
 public class SmartHealthOverviewDTO {
     private Long userId;
+    /** AVAILABLE：有可分析记录；NO_DATA：需要先补充记录。 */
+    private String dataStatus = "AVAILABLE";
+    private String message;
     private String generatedAt;
     private Double bmi;
     private String overallStatus;

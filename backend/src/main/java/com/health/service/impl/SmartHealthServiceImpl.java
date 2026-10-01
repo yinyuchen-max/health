@@ -143,6 +143,18 @@ public class SmartHealthServiceImpl implements SmartHealthService {
         User user = userMapper.selectById(userId);
         List<HealthRecord> healthRecords = loadHealthRecords(userId);
         List<SportRecord> sportRecords = loadSportRecords(userId);
+        // 必须早于缓存读取、RAG 和 AI：删除全部记录后也不能展示旧报告。
+        // 个人资料、提醒或历史副本不能替代当前有效的健康/运动记录。
+        if (healthRecords.isEmpty() && sportRecords.isEmpty()) {
+            SmartHealthOverviewDTO empty = new SmartHealthOverviewDTO();
+            empty.setUserId(userId);
+            empty.setDataStatus("NO_DATA");
+            empty.setMessage("暂无健康或运动记录，暂时无法生成健康报告。请先添加至少一条健康记录或运动记录，再查看分析。");
+            empty.setOverallStatus("待补充数据");
+            empty.setRiskAssessments(List.of());
+            empty.setQuickTips(List.of());
+            return empty;
+        }
         List<HistoryRecord> historyRecords = loadHistoryRecords(userId);
 
         // 基于健康/运动数据计算指纹：数据不变则指纹不变，直接返回缓存，节省 AI 调用

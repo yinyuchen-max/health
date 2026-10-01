@@ -3,6 +3,7 @@ package com.health.service.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.health.domain.dto.SmartHealthOverviewDTO;
 import com.health.domain.entity.User;
+import com.health.domain.entity.HealthRecord;
 import com.health.mapper.HealthRecordMapper;
 import com.health.mapper.SportRecordMapper;
 import com.health.mapper.UserMapper;
@@ -49,7 +50,9 @@ class SmartHealthServiceImplTest {
         user.setWeight(70.0);
 
         when(userMapper.selectById(1L)).thenReturn(user);
-        when(healthRecordMapper.selectList(any())).thenReturn(List.of());
+        HealthRecord record = new HealthRecord();
+        record.setHeartRate(75);
+        when(healthRecordMapper.selectList(any())).thenReturn(List.of(record));
         when(sportRecordMapper.selectList(any())).thenReturn(List.of());
         when(chatModel.chat(anyString())).thenThrow(new RuntimeException("timeout of 15000ms exceeded"));
 
@@ -89,7 +92,9 @@ class SmartHealthServiceImplTest {
         user.setWeight(70.0);
 
         when(userMapper.selectById(1L)).thenReturn(user);
-        when(healthRecordMapper.selectList(any())).thenReturn(List.of());
+        HealthRecord record = new HealthRecord();
+        record.setHeartRate(75);
+        when(healthRecordMapper.selectList(any())).thenReturn(List.of(record));
         when(sportRecordMapper.selectList(any())).thenReturn(List.of());
         when(ragService.retrieveRelevantKnowledge(any(), any(), any(), any(), any()))
                 .thenReturn(List.of("血压达到 140/90 mmHg 及以上时，应减少钠盐摄入并规律复测。"));

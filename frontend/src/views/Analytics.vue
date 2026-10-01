@@ -30,6 +30,9 @@
       </div>
     </el-card>
 
+    <HealthDataNotice v-if="noData" :message="overview?.message" />
+
+    <template v-if="overview && !noData">
     <!-- 指标卡片 -->
     <el-row :gutter="16">
       <el-col :xs="24" :sm="12" :lg="8" :xl="4" v-for="item in metricCards" :key="item.label">
@@ -241,6 +244,7 @@
         </el-card>
       </el-col>
     </el-row>
+    </template>
   </div>
 </template>
 
@@ -251,6 +255,7 @@ import { ElMessage } from 'element-plus'
 import request from '../utils/request'
 import { useUserStore } from '../store/user'
 import { useAnalyticsStore } from '../store/analytics'
+import HealthDataNotice from '../components/HealthDataNotice.vue'
 import {
   DataLine, TrendCharts, Warning, Stopwatch, PieChart,
   Document, ChatDotSquare, Bowl, Moon, Lightning, Refresh
@@ -260,6 +265,7 @@ const userStore = useUserStore()
 const analyticsStore = useAnalyticsStore()
 const overview = ref(null)
 const refreshing = ref(false)
+const noData = computed(() => overview.value?.dataStatus === 'NO_DATA')
 
 const healthMetricsRef = ref(null)
 const riskBarRef = ref(null)
@@ -406,7 +412,11 @@ const renderSportDistributionChart = () => {
   })
 }
 
-const renderCharts = async () => { await nextTick(); renderHealthMetricsChart(); renderRiskBarChart(); renderExerciseTrendChart(); renderSportDistributionChart() }
+const renderCharts = async () => {
+  await nextTick()
+  if (noData.value) { disposeCharts(); return }
+  renderHealthMetricsChart(); renderRiskBarChart(); renderExerciseTrendChart(); renderSportDistributionChart()
+}
 const resizeCharts = () => { healthMetricsChart?.resize(); riskBarChart?.resize(); exerciseTrendChart?.resize(); sportDistributionChart?.resize() }
 
 const loadData = async () => {
@@ -426,7 +436,7 @@ const loadData = async () => {
   } finally { refreshing.value = false }
 }
 
-watch([healthTrend, exerciseTrend, sportDistribution, risks], renderCharts, { deep: true })
+watch([healthTrend, exerciseTrend, sportDistribution, risks, noData], renderCharts, { deep: true })
 onMounted(async () => { await loadData(); window.addEventListener('resize', resizeCharts) })
 onBeforeUnmount(() => { window.removeEventListener('resize', resizeCharts); disposeCharts() })
 </script>
