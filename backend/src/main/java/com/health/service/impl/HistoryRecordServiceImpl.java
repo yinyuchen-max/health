@@ -3,6 +3,7 @@ package com.health.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.health.common.exception.BusinessException;
 import com.health.domain.dto.HistoryRecordDTO;
 import com.health.domain.entity.HistoryRecord;
 import com.health.domain.vo.HistoryRecordVO;
@@ -17,7 +18,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class HistoryRecordServiceImpl extends ServiceImpl<HistoryRecordMapper, HistoryRecord> implements HistoryRecordService {
@@ -69,7 +69,7 @@ public class HistoryRecordServiceImpl extends ServiceImpl<HistoryRecordMapper, H
                     vo.setTypeName(getTypeName(record.getType()));
                     return vo;
                 })
-                .collect(Collectors.toList());
+                .toList();
 
         Map<String, Object> result = new HashMap<>();
         result.put("records", records);
@@ -92,7 +92,7 @@ public class HistoryRecordServiceImpl extends ServiceImpl<HistoryRecordMapper, H
     public void updateHistoryRecord(Long id, HistoryRecordDTO historyRecordDTO) {
         HistoryRecord record = getById(id);
         if (record == null) {
-            throw new RuntimeException("History record not found");
+            throw new BusinessException("历史记录不存在");
         }
 
         BeanUtils.copyProperties(historyRecordDTO, record, "id", "userId", "createTime", "updateTime");

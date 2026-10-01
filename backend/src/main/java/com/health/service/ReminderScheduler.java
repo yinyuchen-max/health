@@ -23,7 +23,11 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 提醒定时调度器（消息生产者）
@@ -47,6 +51,23 @@ public class ReminderScheduler {
     private final UserMapper userMapper;
     private final StringRedisTemplate redisTemplate;
     private final RabbitTemplate rabbitTemplate;
+    /**
+     * 阿里手册：禁止使用 Executors 创建线程池，改用 ScheduledThreadPoolExecutor 明确参数
+     * 线程命名格式：health-reminder-{序号}
+     */
+    private final ScheduledExecutorService sendScheduler = new ScheduledThreadPoolExecutor(2,
+            new ThreadFactory() {
+                private final AtomicInteger counter = new AtomicInteger(1);
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, "health-reminder-" + counter.getAndIncrement());
+                    t.setDaemon(true);
+                    return t;
+                }
+            });
+
+    /** 每条消息之间的发送间隔（秒） */
+    private static final int SEND_INTERVAL_SECONDS = 20;
 
     @Value("${reminder.scheduler.enabled:false}")
     private boolean enabled;
@@ -66,7 +87,7 @@ public class ReminderScheduler {
     /**
      * 每分钟执行一次，扫描匹配的提醒偏好
      */
-    @Scheduled(fixedDelayString = "${reminder.scheduler.check-interval-ms:60000}")
+    @Scheduled(fixedRateString = "${reminder.scheduler.check-interval-ms:60000}")
     public void checkAndSendReminders() {
         if (!enabled) {
             return;
@@ -87,12 +108,18 @@ public class ReminderScheduler {
 
         log.info("提醒调度: 当前时间={}, 匹配到 {} 条提醒偏好", currentTime, preferences.size());
 
+        int delayIndex = 0;
         for (ReminderPreference pref : preferences) {
-            try {
-                processReminder(pref, today, currentTime);
-            } catch (Exception e) {
-                log.error("处理提醒失败: preferenceId={}, userId={}", pref.getId(), pref.getUserId(), e);
-            }
+            // 每条消息延时投递到 MQ：第0条立即发，第1条20秒后，第2条40秒后...
+            int delaySeconds = delayIndex * SEND_INTERVAL_SECONDS;
+            sendScheduler.schedule(() -> {
+                try {
+                    processReminder(pref, today, currentTime);
+                } catch (Exception e) {
+                    log.error("处理提醒失败: preferenceId={}, userId={}", pref.getId(), pref.getUserId(), e);
+                }
+            }, delaySeconds, TimeUnit.SECONDS);
+            delayIndex++;
         }
     }
 

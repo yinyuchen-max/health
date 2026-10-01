@@ -101,7 +101,12 @@ services:
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:80:80"    # 改为仅本地访问，安全起见
+      - "80:80"      # 域名直连：HTTP（ACME 验证 + IP 直连）
+      - "443:443"    # 域名直连：HTTPS（需在安全组放行 443）
+    volumes:
+      # Let's Encrypt 证书与 webroot 验证目录（certbot 容器写入，nginx 只读）
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
 
   cloudflared:
     image: cloudflare/cloudflared:latest

@@ -1,5 +1,6 @@
 package com.health.common.config;
 
+import com.health.common.exception.BusinessException;
 import com.health.common.exception.ForbiddenException;
 import com.health.common.exception.RateLimitException;
 import com.health.common.exception.UnauthorizedException;
@@ -16,6 +17,18 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /**
+     * 处理业务异常（Service 层主动抛出的校验失败）
+     */
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(BusinessException.class)
+    public Result<?> handleBusinessException(BusinessException e) {
+        log.warn("业务异常: {}", e.getMessage());
+        Result<?> result = Result.failed(e.getMessage());
+        result.setCode(e.getCode());
+        return result;
+    }
 
     /**
      * 处理限流异常

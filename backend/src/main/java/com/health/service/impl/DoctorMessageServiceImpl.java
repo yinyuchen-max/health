@@ -2,6 +2,8 @@ package com.health.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.health.common.exception.BusinessException;
+import com.health.common.enums.DoctorStatus;
 import com.health.domain.dto.DoctorMessageDTO;
 import com.health.domain.entity.Doctor;
 import com.health.domain.entity.DoctorMessage;
@@ -16,7 +18,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class DoctorMessageServiceImpl extends ServiceImpl<DoctorMessageMapper, DoctorMessage>
@@ -33,11 +34,11 @@ public class DoctorMessageServiceImpl extends ServiceImpl<DoctorMessageMapper, D
     @Override
     public DoctorMessageVO sendMessageToDoctor(Long userId, DoctorMessageDTO dto) {
         if (dto.getDoctorId() == null) {
-            throw new RuntimeException("请指定目标医生");
+            throw new BusinessException("请指定目标医生");
         }
         Doctor doctor = doctorMapper.selectById(dto.getDoctorId());
-        if (doctor == null || !"approved".equals(doctor.getStatus())) {
-            throw new RuntimeException("该医生不存在或未通过审核");
+        if (doctor == null || !DoctorStatus.APPROVED.getCode().equals(doctor.getStatus())) {
+            throw new BusinessException("该医生不存在或未通过审核");
         }
 
         DoctorMessage msg = new DoctorMessage();
@@ -57,8 +58,8 @@ public class DoctorMessageServiceImpl extends ServiceImpl<DoctorMessageMapper, D
     public DoctorMessageVO sendMessageToUser(Long doctorId, Long userId, DoctorMessageDTO dto) {
         // 验证医生身份
         Doctor doctor = doctorMapper.selectById(doctorId);
-        if (doctor == null || !"approved".equals(doctor.getStatus())) {
-            throw new RuntimeException("医生身份验证失败");
+        if (doctor == null || !DoctorStatus.APPROVED.getCode().equals(doctor.getStatus())) {
+            throw new BusinessException("医生身份验证失败");
         }
 
         DoctorMessage msg = new DoctorMessage();
@@ -84,7 +85,7 @@ public class DoctorMessageServiceImpl extends ServiceImpl<DoctorMessageMapper, D
         int offset = (page - 1) * size;
         qw.last("LIMIT " + size + " OFFSET " + offset);
 
-        return list(qw).stream().map(this::toVO).collect(Collectors.toList());
+        return list(qw).stream().map(this::toVO).toList();
     }
 
     @Override

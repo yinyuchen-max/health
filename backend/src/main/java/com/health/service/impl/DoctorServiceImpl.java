@@ -2,6 +2,8 @@ package com.health.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.health.common.exception.BusinessException;
+import com.health.common.enums.DoctorStatus;
 import com.health.domain.dto.DoctorFullRegisterDTO;
 import com.health.domain.dto.DoctorRegisterDTO;
 import com.health.domain.dto.UserRegisterDTO;
@@ -77,19 +79,20 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor>
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public DoctorVO registerAsDoctor(Long userId, DoctorRegisterDTO dto) {
         // 检查是否已提交过申请
         QueryWrapper<Doctor> qw = new QueryWrapper<>();
         qw.eq("user_id", userId);
         Doctor existing = getOne(qw);
         if (existing != null) {
-            if ("approved".equals(existing.getStatus())) {
-                throw new RuntimeException("您已经是注册医生，无需重复申请");
+            if (DoctorStatus.APPROVED.getCode().equals(existing.getStatus())) {
+                throw new BusinessException("您已经是注册医生，无需重复申请");
             }
-            if ("pending".equals(existing.getStatus())) {
-                throw new RuntimeException("您的医生申请正在审核中，请耐心等待");
+            if (DoctorStatus.PENDING.getCode().equals(existing.getStatus())) {
+                throw new BusinessException("您的医生申请正在审核中，请耐心等待");
             }
-            if ("rejected".equals(existing.getStatus())) {
+            if (DoctorStatus.REJECTED.getCode().equals(existing.getStatus())) {
                 // 允许重新提交，更新原有记录
                 existing.setRealName(dto.getRealName());
                 existing.setHospital(dto.getHospital());
@@ -98,7 +101,7 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor>
                 existing.setSpecialization(dto.getSpecialization());
                 existing.setLicenseNumber(dto.getLicenseNumber());
                 existing.setIntroduction(dto.getIntroduction());
-                existing.setStatus("pending");
+                existing.setStatus(DoctorStatus.PENDING.getCode());
                 existing.setRejectReason(null);
                 existing.setApprovedBy(null);
                 existing.setApprovedAt(null);
@@ -110,7 +113,7 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor>
         Doctor doctor = new Doctor();
         BeanUtils.copyProperties(dto, doctor);
         doctor.setUserId(userId);
-        doctor.setStatus("pending");
+        doctor.setStatus(DoctorStatus.PENDING.getCode());
         doctor.setCreatedAt(LocalDateTime.now());
         doctor.setUpdatedAt(LocalDateTime.now());
         doctor.setDeleted(0);
@@ -132,7 +135,7 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor>
     @Override
     public List<DoctorVO> getApprovedDoctorList() {
         QueryWrapper<Doctor> qw = new QueryWrapper<>();
-        qw.eq("status", "approved").eq("deleted", 0);
+        qw.eq("status", DoctorStatus.APPROVED.getCode()).eq("deleted", 0);
         qw.orderByDesc("created_at");
         List<Doctor> doctors = list(qw);
         return doctors.stream().map(this::toVO).toList();
@@ -141,7 +144,7 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor>
     @Override
     public List<DoctorVO> getDoctorListByDepartment(String department) {
         QueryWrapper<Doctor> qw = new QueryWrapper<>();
-        qw.eq("status", "approved").eq("deleted", 0);
+        qw.eq("status", DoctorStatus.APPROVED.getCode()).eq("deleted", 0);
         if (department != null && !department.isBlank()) {
             qw.eq("department", department);
         }
@@ -152,21 +155,22 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor>
     @Override
     public List<DoctorVO> getPendingDoctorList() {
         QueryWrapper<Doctor> qw = new QueryWrapper<>();
-        qw.eq("status", "pending").eq("deleted", 0);
+        qw.eq("status", DoctorStatus.PENDING.getCode()).eq("deleted", 0);
         qw.orderByAsc("created_at");
         return list(qw).stream().map(this::toVO).toList();
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void approveDoctor(Long doctorId, Long adminUserId) {
         Doctor doctor = getById(doctorId);
         if (doctor == null) {
-            throw new RuntimeException("医生申请不存在");
+            throw new BusinessException("医生申请不存在");
         }
-        if (!"pending".equals(doctor.getStatus())) {
-            throw new RuntimeException("该申请已被处理");
+        if (!DoctorStatus.PENDING.getCode().equals(doctor.getStatus())) {
+            throw new BusinessException("该申请已被处理");
         }
-        doctor.setStatus("approved");
+        doctor.setStatus(DoctorStatus.APPROVED.getCode());
         doctor.setApprovedBy(adminUserId);
         doctor.setApprovedAt(LocalDateTime.now());
         doctor.setRejectReason(null);
@@ -177,15 +181,16 @@ public class DoctorServiceImpl extends ServiceImpl<DoctorMapper, Doctor>
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void rejectDoctor(Long doctorId, Long adminUserId, String reason) {
         Doctor doctor = getById(doctorId);
         if (doctor == null) {
-            throw new RuntimeException("医生申请不存在");
+            throw new BusinessException("医生申请不存在");
         }
-        if (!"pending".equals(doctor.getStatus())) {
-            throw new RuntimeException("该申请已被处理");
+        if (!DoctorStatus.PENDING.getCode().equals(doctor.getStatus())) {
+            throw new BusinessException("该申请已被处理");
         }
-        doctor.setStatus("rejected");
+        doctor.setStatus(DoctorStatus.REJECTED.getCode());
         doctor.setApprovedBy(adminUserId);
         doctor.setApprovedAt(LocalDateTime.now());
         doctor.setRejectReason(reason);

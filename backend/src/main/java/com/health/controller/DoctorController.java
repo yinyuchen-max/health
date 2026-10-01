@@ -2,6 +2,7 @@ package com.health.controller;
 
 import com.health.common.annotation.RateLimit;
 import com.health.common.annotation.RateLimit.LimitType;
+import com.health.common.enums.DoctorStatus;
 import com.health.common.utils.Result;
 import com.health.common.utils.SecurityUtil;
 import com.health.common.exception.ForbiddenException;
@@ -39,7 +40,7 @@ public class DoctorController {
     public Result<List<DoctorAppointment>> getMyAppointments() {
         Long userId = securityUtil.getCurrentUserId();
         var doctorInfo = doctorService.getMyDoctorInfo(userId);
-        if (doctorInfo == null || !"approved".equals(doctorInfo.getStatus())) {
+        if (doctorInfo == null || !DoctorStatus.APPROVED.getCode().equals(doctorInfo.getStatus())) {
             throw new ForbiddenException("您不是已认证的医生");
         }
         QueryWrapper<DoctorAppointment> qw = new QueryWrapper<>();

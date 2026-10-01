@@ -25,6 +25,9 @@ public class ChatController {
 
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
 
+    /** SSE 流式响应超时时间（毫秒） */
+    private static final long SSE_TIMEOUT_MS = 120_000L;
+
     private final ChatService chatService;
     private final SecurityUtil securityUtil;
 
@@ -53,7 +56,7 @@ public class ChatController {
     @RateLimit(key = "chat-send", maxRequests = 10, timeWindow = 1, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.USER)
     public SseEmitter sendStream(@RequestBody ChatRequestDTO request) {
         Long currentUserId = securityUtil.getCurrentUserId();
-        SseEmitter emitter = new SseEmitter(120_000L);
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
         AtomicBoolean finished = new AtomicBoolean(false);
 
         emitter.onTimeout(() -> {

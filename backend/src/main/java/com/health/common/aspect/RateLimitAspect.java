@@ -70,7 +70,8 @@ public class RateLimitAspect {
                 if (auth != null && auth.isAuthenticated() && auth.getPrincipal() != null) {
                     return "user:" + auth.getPrincipal().toString();
                 }
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.debug("获取当前用户身份失败，回退到IP限流: {}", e.getMessage());
             }
         }
         // 回退到 IP

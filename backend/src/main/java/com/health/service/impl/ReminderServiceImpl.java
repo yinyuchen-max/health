@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, ReminderPreference> implements ReminderService {
@@ -40,7 +39,7 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
 
         return list(queryWrapper).stream()
                 .map(this::convertToVO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -124,7 +123,7 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
                     dto.setReason("Generated from recent health records, sport records and user profile");
                     return dto;
                 })
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override

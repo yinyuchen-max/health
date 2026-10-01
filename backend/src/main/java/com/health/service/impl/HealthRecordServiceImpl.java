@@ -3,6 +3,7 @@ package com.health.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.health.common.exception.BusinessException;
 import com.health.domain.dto.HealthRecordDTO;
 import com.health.domain.entity.HealthRecord;
 import com.health.domain.vo.HealthRecordVO;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class HealthRecordServiceImpl extends ServiceImpl<HealthRecordMapper, HealthRecord> implements HealthRecordService {
@@ -58,7 +58,7 @@ public class HealthRecordServiceImpl extends ServiceImpl<HealthRecordMapper, Hea
                     BeanUtils.copyProperties(record, vo);
                     return vo;
                 })
-                .collect(Collectors.toList());
+                .toList();
         Map<String, Object> result = new HashMap<>();
         result.put("records", records);
         result.put("total", resultPage.getTotal());
@@ -81,7 +81,7 @@ public class HealthRecordServiceImpl extends ServiceImpl<HealthRecordMapper, Hea
     public void updateHealthRecord(Long id, HealthRecordDTO healthRecordDTO) {
         HealthRecord record = getById(id);
         if (record == null) {
-            throw new RuntimeException("Health record not found");
+            throw new BusinessException("健康记录不存在");
         }
 
         BeanUtils.copyProperties(healthRecordDTO, record, "id", "userId", "createTime", "updateTime");

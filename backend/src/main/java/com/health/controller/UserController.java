@@ -19,6 +19,8 @@ import com.health.domain.entity.User;
 import com.health.mapper.UserMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,6 +31,8 @@ import java.util.concurrent.TimeUnit;
 @RestController
 @RequestMapping("/api/user")
 public class UserController {
+
+    private static final Logger log = LoggerFactory.getLogger(UserController.class);
 
     @Autowired
     private UserService userService;
@@ -99,8 +103,8 @@ public class UserController {
             try {
                 Date expiration = jwtUtil.getExpirationDateFromToken(token);
                 tokenBlacklistService.addToBlacklist(token, expiration);
-            } catch (Exception ignored) {
-                // Token 解析失败也返回成功
+            } catch (Exception e) {
+                log.debug("Token 解析失败，仍返回登出成功: {}", e.getMessage());
             }
         }
         return Result.success();
@@ -145,8 +149,8 @@ public class UserController {
             try {
                 Date expiration = jwtUtil.getExpirationDateFromToken(token);
                 tokenBlacklistService.addToBlacklist(token, expiration);
-            } catch (Exception ignored) {
-                // Token 解析失败不影响密码修改结果
+            } catch (Exception e) {
+                log.debug("Token 解析失败，不影响密码修改结果: {}", e.getMessage());
             }
         }
         return Result.success();

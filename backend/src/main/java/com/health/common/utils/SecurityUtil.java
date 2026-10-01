@@ -1,5 +1,7 @@
 package com.health.common.utils;
 
+import com.health.common.enums.UserRole;
+import com.health.common.enums.UserStatus;
 import com.health.common.exception.ForbiddenException;
 import com.health.common.exception.UnauthorizedException;
 import com.health.domain.entity.User;
@@ -44,7 +46,7 @@ public class SecurityUtil {
         if (user == null) {
             throw new UnauthorizedException("用户不存在或已被删除");
         }
-        if (user.getStatus() == 0) {
+        if (user.getStatus() == UserStatus.DISABLED.getCode()) {
             throw new ForbiddenException("账号已被禁用");
         }
         return user;
@@ -67,7 +69,7 @@ public class SecurityUtil {
      */
     public void requireAdmin() {
         User user = getCurrentUser();
-        if (!"admin".equals(user.getRole())) {
+        if (!UserRole.ADMIN.getCode().equals(user.getRole())) {
             throw new ForbiddenException("权限不足，仅管理员可操作");
         }
     }
@@ -83,7 +85,7 @@ public class SecurityUtil {
         }
         User user = getCurrentUser();
         // 管理员可以操作所有数据
-        if ("admin".equals(user.getRole())) {
+        if (UserRole.ADMIN.getCode().equals(user.getRole())) {
             return;
         }
         // 普通用户只能操作自己的数据

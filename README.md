@@ -662,7 +662,7 @@ public Result<?> sendMessage(@RequestBody ChatRequest request) { ... }
 - `PUT /api/sport/record/{id}` - 更新运动记录
 
 ### 智能分析
-- `GET /api/smart-health/overview?userId={userId}` - 获取智能健康概览（数据指纹 + Redis 缓存，默认 7 天）
+- `GET /api/smart-health/overview?userId={userId}` - 获取智能健康概览（用户资料、健康/运动及历史档案内容的 SHA-256 哈希 + Redis 持久缓存；内容未变不重复调用 AI，无固定过期时间）
 
 ### AI 对话
 - `POST /api/chat/send` - 发送 AI 对话请求

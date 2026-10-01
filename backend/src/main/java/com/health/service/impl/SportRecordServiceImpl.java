@@ -3,6 +3,7 @@ package com.health.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.health.common.exception.BusinessException;
 import com.health.domain.dto.SportRecordDTO;
 import com.health.domain.entity.SportRecord;
 import com.health.domain.vo.SportRecordVO;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class SportRecordServiceImpl extends ServiceImpl<SportRecordMapper, SportRecord> implements SportRecordService {
@@ -60,7 +60,7 @@ public class SportRecordServiceImpl extends ServiceImpl<SportRecordMapper, Sport
                     BeanUtils.copyProperties(record, vo);
                     return vo;
                 })
-                .collect(Collectors.toList());
+                .toList();
 
         Map<String, Object> result = new HashMap<>();
         result.put("records", records);
@@ -84,7 +84,7 @@ public class SportRecordServiceImpl extends ServiceImpl<SportRecordMapper, Sport
     public void updateSportRecord(Long id, SportRecordDTO sportRecordDTO) {
         SportRecord record = getById(id);
         if (record == null) {
-            throw new RuntimeException("Sport record not found");
+            throw new BusinessException("运动记录不存在");
         }
 
         BeanUtils.copyProperties(sportRecordDTO, record, "id", "userId", "createTime", "updateTime");

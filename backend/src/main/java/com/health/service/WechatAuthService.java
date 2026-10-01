@@ -1,6 +1,7 @@
 package com.health.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.health.common.exception.BusinessException;
 import com.health.common.utils.JwtUtil;
 import com.health.domain.dto.WechatLoginDTO;
 import com.health.domain.dto.WechatLoginResponseDTO;
@@ -72,7 +73,7 @@ public class WechatAuthService {
 
         // 4. 检查用户状态
         if (user.getStatus() != null && user.getStatus() == 0) {
-            throw new RuntimeException("账号已被禁用");
+            throw new BusinessException("账号已被禁用");
         }
 
         // 5. 签发 JWT
@@ -116,7 +117,7 @@ public class WechatAuthService {
             
             if (responseStr == null || responseStr.isBlank()) {
                 log.error("微信 code2Session 失败：响应为空");
-                throw new RuntimeException("微信接口无响应，请检查网络连接");
+                throw new BusinessException("微信接口无响应，请检查网络连接");
             }
 
             @SuppressWarnings("unchecked")
@@ -126,13 +127,13 @@ public class WechatAuthService {
                 Integer errcode = (Integer) result.get("errcode");
                 String errmsg = (String) result.get("errmsg");
                 log.error("微信 code2Session 失败：errcode={}, errmsg={}", errcode, errmsg);
-                throw new RuntimeException("微信登录失败：" + errmsg + " (errcode=" + errcode + ")");
+                throw new BusinessException("微信登录失败：" + errmsg + " (errcode=" + errcode + ")");
             }
 
             String openid = (String) result.get("openid");
             if (openid == null || openid.isBlank()) {
                 log.error("微信 code2Session 响应中无 openid");
-                throw new RuntimeException("微信登录失败：响应中无 openid");
+                throw new BusinessException("微信登录失败：响应中无 openid");
             }
 
             // 保存 session_key 到 Redis，用于后续解密微信运动数据
@@ -142,11 +143,13 @@ public class WechatAuthService {
             }
             
             return openid;
+        } catch (BusinessException e) {
+            throw e;
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
             log.error("微信 code2Session 异常：{}", e.getMessage(), e);
-            throw new RuntimeException("微信登录异常：" + e.getMessage());
+            throw new BusinessException("微信登录异常：" + e.getMessage());
         }
     }
 
@@ -177,7 +180,7 @@ public class WechatAuthService {
         try {
             String sessionKey = redisTemplate.opsForValue().get("wx_session:" + openid);
             if (sessionKey == null) {
-                throw new RuntimeException("session_key 已过期，请重新登录");
+                throw new BusinessException("session_key 已过期，请重新登录");
             }
 
             byte[] dataByte = Base64.getDecoder().decode(encryptedData);
@@ -197,7 +200,7 @@ public class WechatAuthService {
             return resultMap;
         } catch (Exception e) {
             log.error("解密微信运动数据失败：{}", e.getMessage(), e);
-            throw new RuntimeException("解密失败：" + e.getMessage());
+            throw new BusinessException("解密失败：" + e.getMessage());
         }
     }
 }

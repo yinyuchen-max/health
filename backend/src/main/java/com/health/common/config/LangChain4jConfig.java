@@ -84,8 +84,8 @@ public class LangChain4jConfig {
                 .modelName(embeddingModelName)
                 .baseUrl(embeddingBaseUrl)
                 .timeout(Duration.ofSeconds(timeout))
-                .logRequests(true)
-                .logResponses(true)
+                .logRequests(false)
+                .logResponses(false)
                 .build();
     }
 }

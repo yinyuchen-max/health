@@ -1,5 +1,6 @@
 package com.health.controller;
 
+import com.health.common.enums.DoctorStatus;
 import com.health.common.exception.ForbiddenException;
 import com.health.common.utils.Result;
 import com.health.common.utils.SecurityUtil;
@@ -108,7 +109,7 @@ public class DoctorMessageController {
     private Long getMyDoctorId() {
         Long userId = securityUtil.getCurrentUserId();
         var doctorInfo = doctorService.getMyDoctorInfo(userId);
-        if (doctorInfo == null || !"approved".equals(doctorInfo.getStatus())) {
+        if (doctorInfo == null || !DoctorStatus.APPROVED.getCode().equals(doctorInfo.getStatus())) {
             throw new ForbiddenException("您不是已认证的医生，无法使用此功能");
         }
         return doctorInfo.getId();

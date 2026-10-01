@@ -1,10 +1,12 @@
 package com.health.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.health.domain.dto.ChangePasswordDTO;
 import com.health.domain.dto.UserLoginDTO;
 import com.health.domain.dto.UserRegisterDTO;
 import com.health.domain.entity.User;
+import com.health.domain.vo.AdminUserVO;
 import com.health.domain.vo.UserVO;
 
 public interface UserService extends IService<User> {
@@ -29,5 +31,5 @@ public interface UserService extends IService<User> {
 
     void updateUserStatus(Long userId, Integer status);
 
-    com.baomidou.mybatisplus.core.metadata.IPage<com.health.domain.vo.AdminUserVO> getUserList(int pageNum, int pageSize);
+    IPage<AdminUserVO> getUserList(int pageNum, int pageSize);
 }
