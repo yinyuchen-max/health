@@ -138,8 +138,8 @@ const submitChangePassword = async () => {
 
     ElMessage.success('密码修改成功，请重新登录')
 
-    // 后端已将当前 token 加入黑名单，前端清除登录态并跳转登录页
-    userStore.logout()
+    // 后端已撤销该用户全部会话，前端清除登录态并跳转登录页
+    userStore.clearSession()
     router.push('/')
   } catch (error) {
     console.error('Failed to change password:', error)

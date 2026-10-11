@@ -1,4 +1,5 @@
 const { get } = require('../../utils/request')
+const runtime = require('../../config/runtime')
 
 Page({
   data: {
@@ -24,7 +25,7 @@ Page({
       const userId = app.globalData.userInfo?.id
       if (!userId) return
 
-      const overview = await get(`/api/smart-health/overview?userId=${userId}`, {}, { showLoading: false })
+      const overview = await get(`/api/smart-health/overview?userId=${userId}`, {}, { showLoading: false, timeout: runtime.smartHealthTimeoutMs })
 
       // 处理风险评估列表
       const riskList = (overview.riskAssessments || [])

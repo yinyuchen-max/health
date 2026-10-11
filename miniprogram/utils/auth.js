@@ -22,7 +22,7 @@ async function wxLogin() {
           const result = await post('/api/user/wechat-login', { code: loginRes.code })
           // result: { token, userInfo }
           if (result && result.token) {
-            app.setLogin(result.token, result.userInfo || {})
+            app.setLogin(result, result.userInfo || {})
             resolve(result)
           } else {
             reject({ message: '登录响应异常' })
@@ -58,7 +58,14 @@ async function fetchUserInfo() {
 /**
  * 退出登录
  */
-function logout() {
+async function logout() {
+  try {
+    if (app.globalData.refreshToken) {
+      // Wait for any in-flight rotation so logout uses the current refresh credential.
+      await app.ensureAccess()
+      if (app.globalData.refreshToken) await post('/api/user/native-logout', { refreshToken: app.globalData.refreshToken }, { showLoading: false })
+    }
+  } catch (error) { wx.showToast({ title: error.message || '退出失败，请稍后重试', icon: 'none' }); return }
   app.clearLogin()
   wx.redirectTo({ url: '/pages/login/login' })
 }
@@ -67,7 +74,7 @@ function logout() {
  * 检查是否已登录
  */
 function isLoggedIn() {
-  return !!app.globalData.token
+  return !!app.globalData.refreshToken
 }
 
 module.exports = {

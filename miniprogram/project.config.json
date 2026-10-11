@@ -1,7 +1,9 @@
 {
   "description": "健康管理系统微信小程序",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      { "type": "folder", "value": "tests" }
+    ],
     "include": []
   },
   "setting": {

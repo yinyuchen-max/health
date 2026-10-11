@@ -125,6 +125,7 @@
 </template>
 
 <script setup>
+import { ElMessage } from 'element-plus'
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
@@ -170,8 +171,8 @@ const switchToUser = () => {
   router.push('/app/dashboard')
 }
 
-const handleLogout = () => {
-  userStore.logout()
+const handleLogout = async () => {
+  try { await userStore.logout() } catch (error) { ElMessage.error(error.message || '退出失败，请稍后重试'); return }
   router.push('/')
 }
 

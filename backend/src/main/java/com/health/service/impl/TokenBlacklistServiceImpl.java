@@ -1,6 +1,10 @@
 package com.health.service.impl;
 
 import com.health.service.TokenBlacklistService;
+import com.health.common.utils.JwtUtil;
+import com.health.common.security.TokenDigests;
+import com.health.common.exception.AuthStoreUnavailableException;
+import com.health.service.AuthSessionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -24,15 +28,19 @@ public class TokenBlacklistServiceImpl implements TokenBlacklistService {
     private static final String USER_TOKENS_PREFIX = "auth:user-tokens:";
 
     private final RedisTemplate<String, Object> redisTemplate;
+    private final JwtUtil jwtUtil;
+    private final AuthSessionService sessions;
 
-    public TokenBlacklistServiceImpl(RedisTemplate<String, Object> redisTemplate) {
+    public TokenBlacklistServiceImpl(RedisTemplate<String, Object> redisTemplate, JwtUtil jwtUtil, AuthSessionService sessions) {
+        this.sessions = sessions;
+        this.jwtUtil = jwtUtil;
         this.redisTemplate = redisTemplate;
     }
 
     @Override
     public void addToBlacklist(String token, Date expiration) {
         try {
-            String key = BLACKLIST_PREFIX + token;
+            String key = BLACKLIST_PREFIX + TokenDigests.sha256(token);
             long ttlMillis = expiration.getTime() - System.currentTimeMillis();
 
             if (ttlMillis <= 0) {
@@ -43,33 +51,33 @@ public class TokenBlacklistServiceImpl implements TokenBlacklistService {
             redisTemplate.opsForValue().set(key, "1", ttlMillis, TimeUnit.MILLISECONDS);
             log.debug("Token 已加入黑名单，TTL: {} ms", ttlMillis);
         } catch (Exception e) {
-            log.warn("将 Token 加入黑名单失败: {}", e.getMessage());
+            throw new AuthStoreUnavailableException();
         }
     }
 
     @Override
     public boolean isBlacklisted(String token) {
         try {
-            String key = BLACKLIST_PREFIX + token;
+            String key = BLACKLIST_PREFIX + TokenDigests.sha256(token);
             Boolean exists = redisTemplate.hasKey(key);
             return Boolean.TRUE.equals(exists);
         } catch (Exception e) {
-            log.warn("检查 Token 黑名单失败: {}", e.getMessage());
-            // Redis 异常时不阻塞业务，返回 false
-            return false;
+            throw new AuthStoreUnavailableException();
         }
     }
 
     @Override
     public void blacklistAllTokensForUser(String username) {
+        sessions.revokeAll(username);
         try {
             String userTokensKey = USER_TOKENS_PREFIX + username;
             // 标记该用户需要强制重新登录
-            // 设置 24 小时过期（与 JWT 有效期一致）
-            redisTemplate.opsForValue().set(userTokensKey, System.currentTimeMillis(), 24, TimeUnit.HOURS);
+            // 覆盖仍有效的旧 JWT 的最长剩余寿命，与签发配置共用同一个来源。
+            long ttlMillis = jwtUtil.getExpirationMillis();
+            redisTemplate.opsForValue().set(userTokensKey, System.currentTimeMillis(), ttlMillis, TimeUnit.MILLISECONDS);
             log.info("已为用户 {} 设置强制下线标记", username);
         } catch (Exception e) {
-            log.warn("设置用户强制下线标记失败: {}", e.getMessage());
+            throw new AuthStoreUnavailableException();
         }
     }
 
@@ -90,8 +98,7 @@ public class TokenBlacklistServiceImpl implements TokenBlacklistService {
             }
             return false;
         } catch (Exception e) {
-            log.warn("检查用户 Token 失效状态失败: {}", e.getMessage());
-            return false;
+            throw new AuthStoreUnavailableException();
         }
     }
 }

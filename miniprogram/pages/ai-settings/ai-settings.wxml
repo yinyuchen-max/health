@@ -1,0 +1,16 @@
+<view class="page">
+  <view class="card">
+    <text class="title">使用自己的 AI API Key</text>
+    <text class="hint">模型费用从你的服务商账户扣除。健康问题及分析所需数据会发送给所选服务商。密钥按账号加密保存，不会回显。</text>
+    <text class="label">{{configured ? '已配置，密钥留空表示保留' : '尚未配置 API Key'}}</text>
+    <picker range="{{providers}}" value="{{providerIndex}}" bindchange="providerChange" disabled="{{busy || loading}}"><view class="input">{{providers[providerIndex]}}</view></picker>
+    <text class="label">模型名称</text><input class="input" value="{{model}}" data-field="model" bindinput="input" maxlength="100" disabled="{{busy || loading}}" />
+    <text class="label">API Key</text><input class="input" password value="{{apiKey}}" data-field="apiKey" bindinput="input" maxlength="512" placeholder="填写新密钥，保存后不回显" disabled="{{busy || loading}}" />
+    <text class="label">百炼向量 API Key（可选）</text><input class="input" password value="{{embeddingApiKey}}" data-field="embeddingApiKey" bindinput="input" maxlength="512" placeholder="不填则使用免费本地知识检索" disabled="{{busy || loading}}" />
+    <text class="hint">{{embeddingConfigured ? '已配置向量密钥，留空保留。' : '未配置向量密钥。'}}填写后首次构建知识向量会消耗你的百炼额度，后续复用缓存。</text>
+    <view wx:if="{{embeddingConfigured}}"><text>删除向量密钥</text><switch checked="{{clearEmbeddingKey}}" bindchange="clearEmbedding" disabled="{{busy}}" /></view>
+    <button type="primary" bindtap="save" loading="{{busy}}" disabled="{{busy || loading}}">保存配置</button>
+    <button bindtap="remove" disabled="{{!configured || busy || loading}}">删除全部密钥</button>
+    <text class="hint">保存不调用模型。未配置或 AI 不可用时，健康报告仍提供规则分析。</text>
+  </view>
+</view>

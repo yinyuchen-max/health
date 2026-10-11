@@ -3,6 +3,7 @@ package com.health.controller;
 import com.health.common.annotation.RateLimit;
 import com.health.common.annotation.RateLimit.LimitType;
 import com.health.common.exception.ForbiddenException;
+import com.health.common.exception.RecordConflictException;
 import com.health.common.utils.Result;
 import com.health.common.utils.SecurityUtil;
 import com.health.domain.dto.HealthRecordDTO;
@@ -84,7 +85,7 @@ public class HealthRecordController {
         // 校验记录所有权
         var record = healthRecordService.getById(id);
         if (record == null) {
-            return Result.failed("记录不存在");
+            throw new RecordConflictException("健康记录已被删除，请刷新记录后重新编辑");
         }
         securityUtil.requireRecordOwner(record.getUserId());
         // 强制使用原记录所属用户ID，防止越权修改

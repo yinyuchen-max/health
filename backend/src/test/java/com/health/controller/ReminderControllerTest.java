@@ -22,7 +22,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(ReminderController.class)
+@org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc(addFilters = false)
+@WebMvcTest(value = ReminderController.class, excludeFilters = @org.springframework.context.annotation.ComponentScan.Filter(
+        type = org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
+        classes = {com.health.common.config.SecurityConfig.class, com.health.common.filter.JwtAuthenticationFilter.class}))
 class ReminderControllerTest {
 
     @Autowired
@@ -31,6 +34,8 @@ class ReminderControllerTest {
     @MockBean
     private ReminderService reminderService;
 
+    @MockBean private com.health.common.utils.SecurityUtil securityUtil;
+
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -38,6 +43,7 @@ class ReminderControllerTest {
 
     @BeforeEach
     void setUp() {
+        when(securityUtil.getCurrentUserId()).thenReturn(1L);
         testDto = new ReminderPreferenceDTO();
         testDto.setUserId(1L);
         testDto.setType("bloodPressure");

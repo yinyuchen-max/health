@@ -3,6 +3,8 @@ package com.health.common.filter;
 import com.health.common.utils.Result;
 import com.health.common.utils.JwtUtil;
 import com.health.service.impl.TokenBlacklistServiceImpl;
+import com.health.service.AuthSessionService;
+import com.health.common.exception.AuthStoreUnavailableException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
@@ -19,7 +21,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -36,8 +37,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final TokenBlacklistServiceImpl tokenBlacklistService;
     private final ObjectMapper objectMapper;
+    private final AuthSessionService sessions;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, TokenBlacklistServiceImpl tokenBlacklistService, ObjectMapper objectMapper) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, TokenBlacklistServiceImpl tokenBlacklistService, ObjectMapper objectMapper, AuthSessionService sessions) {
+        this.sessions = sessions;
         this.jwtUtil = jwtUtil;
         this.tokenBlacklistService = tokenBlacklistService;
         this.objectMapper = objectMapper;
@@ -53,37 +56,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = authHeader.substring(BEARER_PREFIX.length());
 
             try {
-                // 1. 检查黑名单
+                Claims claims = jwtUtil.parseAccessToken(token);
                 if (tokenBlacklistService.isBlacklisted(token)) {
-                    log.debug("Token 已被加入黑名单");
-                    sendJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "Token 已失效，请重新登录");
-                    return;
+                    sendJsonError(response, 401, "登录已失效，请重新登录"); return;
                 }
-
-                // 2. 解析并验证 Token
-                String username = jwtUtil.extractUsername(token);
-                if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-
-                    // 3. 检查用户强制下线标记
-                    Date issuedAt = jwtUtil.getClaimFromToken(token, Claims::getIssuedAt);
-                    if (tokenBlacklistService.isTokenInvalidated(username, issuedAt)) {
-                        log.debug("用户 {} 的 Token 已被强制失效", username);
-                        sendJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "账号已被强制下线，请重新登录");
-                        return;
-                    }
-
-                    // 4. 设置 Security Context
-                    String role = jwtUtil.extractRole(token);
-                    List<SimpleGrantedAuthority> authorities = List.of(
-                            new SimpleGrantedAuthority("ROLE_" + (role != null ? role.toUpperCase() : "USER"))
-                    );
-
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(username, null, authorities);
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                }
+                String role = sessions.validateAccess(claims);
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                        claims.getSubject(), null, List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(java.util.Locale.ROOT))));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            } catch (AuthStoreUnavailableException | org.springframework.dao.DataAccessException e) {
+                SecurityContextHolder.clearContext();
+                sendJsonError(response, 503, "认证服务暂时不可用，请稍后重试"); return;
             } catch (Exception e) {
-                log.debug("JWT Token 验证失败: {}", e.getMessage());
+                log.debug("JWT 认证失败");
+                SecurityContextHolder.clearContext();
+                sendJsonError(response, 401, "登录已失效，请重新登录"); return;
                 // Token 无效时不设置认证信息，由后续权限控制处理
             }
         }
@@ -109,6 +96,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
+        // Cookie/native refresh authenticate independently, including when the access token has expired.
+        if (List.of("/api/user/csrf", "/api/user/login", "/api/user/native-login", "/api/user/wechat-login",
+                "/api/user/refresh", "/api/user/native-refresh", "/api/user/web-logout", "/api/user/native-logout").contains(path)) return true;
         return path.startsWith("/static/") ||
                path.startsWith("/assets/") ||
                path.equals("/favicon.ico") ||

@@ -8,20 +8,22 @@
  */
 
 const app = getApp()
+const runtime = require('../config/runtime')
 
 /**
  * 通用请求
  * @param {Object} options - { url, method, data, header, showLoading, showError }
  * @returns {Promise}
  */
-function request(options = {}) {
+async function request(options = {}) {
   const {
     url,
     method = 'GET',
     data = {},
     header = {},
     showLoading = true,
-    showError = true
+    showError = true,
+    timeout = runtime.requestTimeoutMs
   } = options
 
   // 拼接完整 URL
@@ -33,7 +35,8 @@ function request(options = {}) {
   }
 
   // 携带 JWT
-  const token = app.globalData.token || wx.getStorageSync('token')
+  const nativeAuth = ['/api/user/wechat-login', '/api/user/native-login', '/api/user/native-refresh', '/api/user/native-logout'].includes(url)
+  const token = !nativeAuth && app.ensureAccess ? await app.ensureAccess() : app.globalData.token
   if (token) {
     defaultHeader['Authorization'] = `Bearer ${token}`
   }
@@ -48,14 +51,20 @@ function request(options = {}) {
       method,
       data,
       header: { ...defaultHeader, ...header },
-      timeout: 15000,
-      success(res) {
+      timeout,
+      async success(res) {
         if (showLoading) wx.hideLoading()
 
         const { statusCode, data: resData } = res
 
         // 401 未登录，跳转登录页
         if (statusCode === 401) {
+          if (!nativeAuth && !options._authRetried && app.ensureAccess) {
+            try {
+              const renewed = await app.ensureAccess(true, token)
+              if (renewed) { resolve(await request({ ...options, _authRetried: true })); return }
+            } catch (error) { reject(error); return }
+          }
           app.clearLogin()
           wx.redirectTo({ url: '/pages/login/login' })
           reject({ message: '登录已过期，请重新登录', status: 401 })
@@ -92,48 +101,45 @@ function request(options = {}) {
  * @param {Object} options - { url, data, onChunk, onDone, onError }
  */
 function streamRequest(options = {}) {
-  const {
-    url,
-    data = {},
-    onChunk,
-    onDone,
-    onError
-  } = options
-
+  const { url, data = {}, onChunk, onDone, onError } = options
   const fullUrl = url.startsWith('http') ? url : `${app.globalData.baseUrl}${url}`
-  const token = app.globalData.token || wx.getStorageSync('token')
-
-  const requestTask = wx.request({
-    url: fullUrl,
-    method: 'POST',
-    data,
-    header: {
-      'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : ''
-    },
-    enableChunked: true,
-    timeout: 120000,
-    success(res) {
-      // 请求完成
-      if (onDone) onDone()
-    },
-    fail(err) {
-      if (onError) onError(err)
-    }
-  })
-
-  // 监听分块数据
-  requestTask.onChunkReceived((res) => {
-    try {
-      // ArrayBuffer 转字符串
-      const text = arrayBufferToString(res.data)
-      if (onChunk) onChunk(text)
-    } catch (e) {
-      console.error('解析分块数据失败:', e)
-    }
-  })
-
-  return requestTask
+  let task
+  let cancelled = false
+  let buffer = ''
+  const send = (token, retried = false) => {
+    if (cancelled) return
+    task = wx.request({
+      url: fullUrl, method: 'POST', data,
+      header: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      enableChunked: true, timeout: runtime.streamTimeoutMs,
+      async success(res) {
+        if (cancelled) return
+        if (res.statusCode === 401 && !retried && app.ensureAccess) {
+          try {
+            const renewed = await app.ensureAccess(true, token)
+            if (renewed) { buffer = ''; send(renewed, true); return }
+          } catch (error) { onError?.(error); return }
+        }
+        if (res.statusCode >= 400) { onError?.({ message: res.statusCode === 401 ? '请重新登录' : '请求失败', status: res.statusCode }); return }
+        onDone?.()
+      },
+      fail(error) { if (!cancelled) onError?.(error) }
+    })
+    task.onChunkReceived(res => {
+      if (cancelled) return
+      buffer += arrayBufferToString(res.data)
+      // Deliver only SSE frames, never authentication-error JSON.
+      let end
+      while ((end = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, end + 2)
+        buffer = buffer.slice(end + 2)
+        if (/^(event:|data:|:)/m.test(frame)) onChunk?.(frame)
+      }
+    })
+  }
+  if (app.ensureAccess) app.ensureAccess().then(token => send(token)).catch(error => onError?.(error))
+  else send(app.globalData.token)
+  return { abort() { cancelled = true; task?.abort() } }
 }
 
 /**

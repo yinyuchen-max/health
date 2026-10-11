@@ -15,6 +15,13 @@ import com.health.service.TokenBlacklistService;
 import com.health.service.UserService;
 import com.health.service.WechatAuthService;
 import com.health.common.utils.JwtUtil;
+import com.health.service.AuthSessionService;
+import com.health.domain.dto.AuthTokens;
+import com.health.common.security.AuthCookies;
+import com.health.common.exception.UnauthorizedException;
+import org.springframework.security.web.csrf.CsrfToken;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.constraints.NotBlank;
 import com.health.domain.entity.User;
 import com.health.mapper.UserMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,7 +31,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -52,11 +58,65 @@ public class UserController {
     @Autowired
     private UserMapper userMapper;
 
+    @Autowired private AuthSessionService authSessions;
+    @Autowired private AuthCookies authCookies;
+
+    @GetMapping("/csrf")
+    public Result<Map<String, String>> csrf(CsrfToken csrf) {
+        return Result.success(Map.of("token", csrf.getToken(), "headerName", csrf.getHeaderName()));
+    }
+
     @PostMapping("/login")
     @RateLimit(key = "login", maxRequests = 5, timeWindow = 1, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.IP)
-    public Result<String> login(@RequestBody @Valid UserLoginDTO userLoginDTO) {
-        String token = userService.login(userLoginDTO);
-        return Result.success(token);
+    public Result<AuthTokens> login(@RequestBody @Valid UserLoginDTO dto, HttpServletRequest request, HttpServletResponse response) {
+        User user = userService.login(dto);
+        String previous = authCookies.read(request, AuthCookies.REFRESH);
+        if (previous != null) {
+            try { authSessions.revokeRefresh(previous, AuthSessionService.WEB); }
+            catch (UnauthorizedException ignored) { /* an old/revoked cookie cannot block a fresh login */ }
+        }
+        AuthTokens tokens = authSessions.issue(user, AuthSessionService.WEB);
+        authCookies.writeRefresh(response, tokens.refreshToken(), tokens.refreshExpiresAt());
+        return Result.success(tokens.forBrowser());
+    }
+
+    @PostMapping("/native-login")
+    @RateLimit(key = "login", maxRequests = 5, timeWindow = 1, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.IP)
+    public Result<AuthTokens> nativeLogin(@RequestBody @Valid UserLoginDTO dto) {
+        return Result.success(authSessions.issue(userService.login(dto), AuthSessionService.NATIVE));
+    }
+
+    @PostMapping("/refresh")
+    public Result<AuthTokens> refresh(HttpServletRequest request, HttpServletResponse response) {
+        AuthTokens tokens = authSessions.refresh(authCookies.read(request, AuthCookies.REFRESH), AuthSessionService.WEB);
+        authCookies.writeRefresh(response, tokens.refreshToken(), tokens.refreshExpiresAt());
+        return Result.success(tokens.forBrowser());
+    }
+
+    public record RefreshRequest(@NotBlank String refreshToken) {
+        @Override public String toString() { return "RefreshRequest[redacted]"; }
+    }
+    @PostMapping("/native-refresh")
+    public Result<AuthTokens> nativeRefresh(@RequestBody @Valid RefreshRequest dto) {
+        return Result.success(authSessions.refresh(dto.refreshToken(), AuthSessionService.NATIVE));
+    }
+
+    @PostMapping("/web-logout")
+    public Result<Void> webLogout(HttpServletRequest request, HttpServletResponse response) {
+        String refresh = authCookies.read(request, AuthCookies.REFRESH);
+        if (refresh != null) {
+            try { authSessions.revokeRefresh(refresh, AuthSessionService.WEB); }
+            catch (UnauthorizedException ignored) { /* already expired/revoked */ }
+        }
+        authCookies.clearRefresh(response);
+        return Result.success();
+    }
+
+    @PostMapping("/native-logout")
+    public Result<Void> nativeLogout(@RequestBody @Valid RefreshRequest dto) {
+        try { authSessions.revokeRefresh(dto.refreshToken(), AuthSessionService.NATIVE); }
+        catch (UnauthorizedException ignored) { /* idempotent */ }
+        return Result.success();
     }
 
     /**
@@ -100,12 +160,8 @@ public class UserController {
         String authorization = request.getHeader("Authorization");
         if (authorization != null && authorization.startsWith("Bearer ")) {
             String token = authorization.substring(7);
-            try {
-                Date expiration = jwtUtil.getExpirationDateFromToken(token);
-                tokenBlacklistService.addToBlacklist(token, expiration);
-            } catch (Exception e) {
-                log.debug("Token 解析失败，仍返回登出成功: {}", e.getMessage());
-            }
+            authSessions.revokeAccess(token);
+            tokenBlacklistService.addToBlacklist(token, jwtUtil.getExpirationDateFromToken(token));
         }
         return Result.success();
     }
@@ -134,7 +190,7 @@ public class UserController {
 
     /**
      * 修改当前登录用户的密码
-     * 成功后将当前 token 加入黑名单，强制重新登录，防止旧 token 继续使用
+     * 成功后撤销该用户全部设备会话，强制重新登录
      */
     @PutMapping("/password")
     @RateLimit(key = "change-password", maxRequests = 5, timeWindow = 1, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.USER)
@@ -142,17 +198,6 @@ public class UserController {
         Long currentUserId = securityUtil.getCurrentUserId();
         userService.changePassword(currentUserId, dto);
 
-        // 密码修改成功后，当前 token 失效，要求用户重新登录
-        String authorization = request.getHeader("Authorization");
-        if (authorization != null && authorization.startsWith("Bearer ")) {
-            String token = authorization.substring(7);
-            try {
-                Date expiration = jwtUtil.getExpirationDateFromToken(token);
-                tokenBlacklistService.addToBlacklist(token, expiration);
-            } catch (Exception e) {
-                log.debug("Token 解析失败，不影响密码修改结果: {}", e.getMessage());
-            }
-        }
         return Result.success();
     }
 

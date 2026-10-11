@@ -82,6 +82,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- 在独立内存库验证乐观锁 SQL，不连接业务数据库。 -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- JWT -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
@@ -147,13 +154,6 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-core</artifactId>
-            <version>1.17.0</version>
-        </dependency>
-
-        <!-- OpenAI-compatible chat and embedding models -->
-        <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-open-ai</artifactId>
             <version>1.17.0</version>
         </dependency>
 

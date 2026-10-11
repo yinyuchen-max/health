@@ -7,7 +7,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.health.common.exception.BusinessException;
 import com.health.common.enums.UserRole;
 import com.health.common.enums.UserStatus;
-import com.health.common.utils.JwtUtil;
+import com.health.service.AuthSessionService;
 import com.health.domain.dto.ChangePasswordDTO;
 import com.health.domain.dto.UserLoginDTO;
 import com.health.domain.dto.UserRegisterDTO;
@@ -26,7 +26,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
+import com.health.common.config.RuntimeSettings;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -37,13 +37,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     /** 登录失败计数 Redis key 前缀（按用户名维度，防止仅靠 IP 限流被绕过后的无限暴力破解） */
     private static final String LOGIN_FAIL_KEY_PREFIX = "login:fail:";
-    /** 窗口期内最大失败次数，达到后临时锁定 */
-    private static final int MAX_LOGIN_FAILURES = 5;
-    /** 锁定时长（自最后一次失败起算） */
-    private static final Duration LOGIN_LOCK_DURATION = Duration.ofMinutes(15);
+    @Autowired
+    private RuntimeSettings settings;
 
     @Autowired
-    private JwtUtil jwtUtil;
+    private AuthSessionService authSessions;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -52,7 +50,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private StringRedisTemplate stringRedisTemplate;
 
     @Override
-    public String login(UserLoginDTO userLoginDTO) {
+    public User login(UserLoginDTO userLoginDTO) {
         String failKey = LOGIN_FAIL_KEY_PREFIX + userLoginDTO.getUsername();
         assertNotLocked(failKey);
 
@@ -69,7 +67,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
 
         clearLoginFailures(failKey);
-        return jwtUtil.generateToken(user.getUsername(), user.getRole());
+        return user;
     }
 
     /**
@@ -93,8 +91,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         } catch (NumberFormatException e) {
             return;
         }
-        if (count >= MAX_LOGIN_FAILURES) {
-            long remainMinutes = LOGIN_LOCK_DURATION.toMinutes();
+        if (count >= settings.getLogin().getMaxFailures()) {
+            long remainMinutes = Math.max(1, (settings.getLogin().getLockDuration().toSeconds() + 59) / 60);
             try {
                 Long ttl = stringRedisTemplate.getExpire(failKey, TimeUnit.SECONDS);
                 if (ttl != null && ttl > 0) {
@@ -110,9 +108,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private void recordLoginFailure(String failKey) {
         try {
             Long count = stringRedisTemplate.opsForValue().increment(failKey);
-            stringRedisTemplate.expire(failKey, LOGIN_LOCK_DURATION);
-            if (count != null && count >= MAX_LOGIN_FAILURES) {
-                log.warn("登录失败次数达到上限，账号临时锁定 {} 分钟: key={}", LOGIN_LOCK_DURATION.toMinutes(), failKey);
+            stringRedisTemplate.expire(failKey, settings.getLogin().getLockDuration());
+            if (count != null && count >= settings.getLogin().getMaxFailures()) {
+                log.warn("登录失败次数达到上限，账号临时锁定 {} 分钟: key={}", settings.getLogin().getLockDuration().toMinutes(), failKey);
             }
         } catch (Exception e) {
             log.warn("记录登录失败次数异常: {}", e.getMessage());
@@ -218,6 +216,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException("无效的状态值，只能为0（禁用）或1（启用）");
         }
 
+        // Revoke first; if the auth store is unavailable do not report a successful disable.
+        authSessions.revokeAll(user.getUsername());
         user.setStatus(status);
         user.setUpdateTime(java.time.LocalDateTime.now());
         updateById(user);
@@ -240,6 +240,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException("新密码不能与旧密码相同");
         }
 
+        authSessions.revokeAll(user.getUsername());
         user.setPassword(passwordEncoder.encode(dto.getNewPassword()));
         user.setUpdateTime(java.time.LocalDateTime.now());
         updateById(user);

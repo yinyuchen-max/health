@@ -1,0 +1,5 @@
+{
+  "requestTimeoutMs": 15000,
+  "smartHealthTimeoutMs": 90000,
+  "streamTimeoutMs": 120000
+}

@@ -1,0 +1,43 @@
+<view class="family-page">
+  <view class="card hero">
+    <text class="eyebrow">FAMILY CARE</text><text class="title">把关心带回家</text>
+    <text class="description">了解家人的健康近况，送去一份日常关怀。</text>
+    <view class="notice">手机号邀请需对方确认。同意后双方可以查看健康报告、发送提醒，随时可解除绑定。</view>
+    <text class="hint">请家人先登录，在个人资料中填写手机号。</text>
+    <text class="label">家人手机号</text><input class="form-input" type="number" maxlength="11" value="{{phone}}" data-field="phone" bindinput="input" placeholder="请输入家人的手机号" />
+    <text class="label">对家人的称呼</text><input class="form-input" maxlength="20" value="{{relationship}}" data-field="relationship" bindinput="input" placeholder="例如：爸爸、妈妈" />
+    <button class="btn-primary" disabled="{{busy || loading}}" loading="{{busy}}" bindtap="invite">发送邀请</button>
+    <button class="link-button" bindtap="goProfile">填写我的手机号</button>
+  </view>
+  <view class="card" wx:if="{{error}}"><text class="error">{{error}}</text><button bindtap="load">重新加载</button></view>
+  <view class="card" wx:if="{{pending.length}}">
+    <text class="section-title">绑定邀请（{{pending.length}}）</text>
+    <view class="row" wx:for="{{pending}}" wx:key="id">
+      <text class="name">{{item.memberName}}</text><text class="description">{{item.maskedPhone}} · {{item.incoming ? '邀请你成为家人' : '等待对方确认'}}</text>
+      <text class="hint">邀请称呼：{{item.relationship}}</text>
+      <view class="actions" wx:if="{{item.incoming}}">
+        <button size="mini" class="primary" disabled="{{busy}}" data-id="{{item.id}}" data-accept="{{true}}" bindtap="decide">同意</button>
+        <button size="mini" disabled="{{busy}}" data-id="{{item.id}}" data-accept="{{false}}" bindtap="decide">拒绝</button>
+      </view>
+      <button wx:else size="mini" disabled="{{busy}}" data-id="{{item.id}}" bindtap="remove">撤回邀请</button>
+    </view>
+  </view>
+  <text class="section-title outside">我的家人（{{active.length}}）</text>
+  <view class="card empty" wx:if="{{!active.length && !loading && !error}}">还没有绑定家人，发送第一份邀请吧</view>
+  <view class="card" wx:for="{{active}}" wx:key="id" wx:for-item="member">
+    <text class="name">{{member.incoming ? member.memberName : member.relationship + ' · ' + member.memberName}}</text><text class="description">{{member.maskedPhone}}</text>
+    <view class="actions"><button size="mini" class="primary" disabled="{{busy}}" data-id="{{member.id}}" bindtap="report">查看健康报告</button><button size="mini" class="danger" disabled="{{busy}}" data-id="{{member.id}}" bindtap="remove">解除绑定</button></view>
+    <text class="hint">给家人发一份提醒</text>
+    <view class="actions"><button wx:for="{{types}}" wx:key="value" size="mini" disabled="{{busy}}" data-id="{{member.id}}" data-type="{{item.value}}" bindtap="remind">{{item.label}}</button></view>
+  </view>
+  <view class="card">
+    <text class="section-title">收到的关怀提醒{{unread ? '（' + unread + '条未读）' : ''}}</text>
+    <text class="hint">提醒在此页面接收，显示最近100条。标记完成不会自动生成健康或运动记录。</text>
+    <view class="empty" wx:if="{{!reminders.length && !error}}">暂无关怀提醒</view>
+    <view class="row" wx:for="{{reminders}}" wx:key="id">
+      <text class="name">{{item.senderName}} 提醒你{{item.label}}</text><text class="description">{{item.time}} · {{item.completed ? '已完成' : item.readStatus ? '已读' : '未读'}}</text>
+      <view class="actions"><button wx:if="{{!item.readStatus}}" size="mini" disabled="{{busy}}" data-id="{{item.id}}" data-action="read" bindtap="acknowledge">标记已读</button><button wx:if="{{!item.completed}}" size="mini" class="primary" disabled="{{busy}}" data-id="{{item.id}}" data-action="complete" bindtap="acknowledge">我已完成</button></view>
+    </view>
+  </view>
+  <button bindtap="load" loading="{{loading}}" disabled="{{loading || busy}}">刷新列表</button>
+</view>

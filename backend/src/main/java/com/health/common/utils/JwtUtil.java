@@ -1,5 +1,6 @@
 package com.health.common.utils;
 
+import jakarta.annotation.PostConstruct;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -10,8 +11,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.UUID;
 
 @Component
 public class JwtUtil {
@@ -22,21 +22,42 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private Long expiration;
 
-    public String generateToken(String username, String role) {
-        Map<String, Object> claims = new HashMap<>();
-        // 从数据库读取的角色，默认 user
-        claims.put("role", role != null ? role : "user");
-        return createToken(claims, username);
+    @Value("${jwt.issuer:health-system}")
+    private String issuer = "health-system";
+
+    @Value("${jwt.audience:health-clients}")
+    private String audience = "health-clients";
+
+    @PostConstruct
+    void validateConfiguration() {
+        if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32) throw new IllegalArgumentException("JWT_SECRET 必须至少包含 32 字节，使用密码学安全随机生成的密钥");
+        if (expiration == null || expiration <= 0) throw new IllegalArgumentException("jwt.expiration 必须为正数毫秒");
     }
 
-    private String createToken(Map<String, Object> claims, String subject) {
+    public long getExpirationMillis() { return expiration; }
+
+    public String generateToken(String username, String role, String sessionId, long ttlMillis) {
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(subject)
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
-                .compact();
+                .setSubject(username)
+                .claim("role", role != null ? role : "user")
+                .claim("sid", sessionId)
+                .claim("type", "access")
+                .setId(UUID.randomUUID().toString())
+                .setIssuer(issuer).setAudience(audience)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + ttlMillis))
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256).compact();
+    }
+
+    public Claims parseAccessToken(String token) {
+        var parsed = Jwts.parserBuilder().setSigningKey(getSigningKey())
+                .requireIssuer(issuer).requireAudience(audience).require("type", "access")
+                .build().parseClaimsJws(token);
+        if (!"HS256".equals(parsed.getHeader().getAlgorithm())) throw new IllegalArgumentException("Unsupported signing algorithm");
+        Claims claims = parsed.getBody();
+        if (claims.getExpiration() == null || claims.getIssuedAt() == null || claims.getId() == null)
+            throw new IllegalArgumentException("Missing required access claims");
+        return claims;
     }
 
     public Boolean validateToken(String token, String username) {
@@ -58,11 +79,7 @@ public class JwtUtil {
     }
 
     private Claims getAllClaimsFromToken(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
+        return parseAccessToken(token);
     }
 
     private SecretKey getSigningKey() {

@@ -10,9 +10,11 @@ import com.health.mapper.HealthRecordMapper;
 import com.health.mapper.HistoryRecordMapper;
 import com.health.mapper.SportRecordMapper;
 import com.health.mapper.UserMapper;
-import com.health.service.HealthKnowledgeRagService;
+import com.health.ai.AiClient;
+import com.health.ai.AiRequest;
+
 import com.health.support.RedisMemoryFixture;
-import dev.langchain4j.model.chat.ChatModel;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -38,8 +40,7 @@ class SmartHealthCacheTest {
     private final SportRecordMapper sportMapper = mock(SportRecordMapper.class);
     private final HistoryRecordMapper historyMapper = mock(HistoryRecordMapper.class);
     private final UserMapper userMapper = mock(UserMapper.class);
-    private final ChatModel model = mock(ChatModel.class);
-    private final HealthKnowledgeRagService rag = mock(HealthKnowledgeRagService.class);
+    private final AiClient model = mock(AiClient.class);
     private final ObjectMapper json = new ObjectMapper();
     private final User user = new User();
     private final List<HealthRecord> health = new ArrayList<>();
@@ -48,7 +49,7 @@ class SmartHealthCacheTest {
     private SmartHealthServiceImpl service;
 
     private SmartHealthServiceImpl service() {
-        SmartHealthServiceImpl result = new SmartHealthServiceImpl(healthMapper, sportMapper, userMapper, model, json, rag);
+        SmartHealthServiceImpl result = new SmartHealthServiceImpl(healthMapper, sportMapper, userMapper, model, json);
         ReflectionTestUtils.setField(result, "stringRedisTemplate", cache.redis);
         ReflectionTestUtils.setField(result, "historyRecordMapper", historyMapper);
         return result;
@@ -77,8 +78,11 @@ class SmartHealthCacheTest {
         when(healthMapper.selectList(any())).thenAnswer(i -> new ArrayList<>(health));
         when(sportMapper.selectList(any())).thenAnswer(i -> new ArrayList<>(sport));
         when(historyMapper.selectList(any())).thenAnswer(i -> new ArrayList<>(history));
-        when(rag.retrieveRelevantKnowledge(any(), any(), any(), any(), any())).thenReturn(List.of("知识依据"));
-        when(model.chat(anyString())).thenReturn("{\"overallStatus\":\"AI result\"}");
+        when(model.complete(any())).thenReturn("{\"overallStatus\":\"AI result\"}");
+        when(model.payer(anyLong())).thenAnswer(i -> i.getArgument(0));
+        when(model.cacheScope(anyLong())).thenAnswer(i -> i.getArgument(0) + ":configured");
+        when(model.prepare(anyLong(),eq("report"),anyMap(),anyList(),isNull())).thenAnswer(i ->
+                new AiRequest(i.getArgument(0),"deepseek","test-key","test-model","report",null,i.getArgument(2),List.of(),null));
         service = service();
     }
 
@@ -87,7 +91,7 @@ class SmartHealthCacheTest {
         health.clear();
         sport.clear();
         // 即使填了个人体征、保留旧缓存和历史副本，也不能凭空生成报告。
-        cache.data.put("smart:overview:v2:1", "old cached report");
+        cache.data.put("smart:overview:v3:1:1", "old cached report");
         HistoryRecord oldHistory = new HistoryRecord();
         oldHistory.setContent("old health record");
         history.add(oldHistory);
@@ -105,7 +109,7 @@ class SmartHealthCacheTest {
         assertNull(result.getStressInsight());
         assertTrue(result.getRiskAssessments().isEmpty());
         assertTrue(result.getQuickTips().isEmpty());
-        verifyNoInteractions(model, rag, historyMapper, cache.redis);
+        verifyNoInteractions(model, historyMapper, cache.redis);
     }
 
     @Test
@@ -114,8 +118,7 @@ class SmartHealthCacheTest {
         health.clear();
         sport.clear();
         assertEquals("NO_DATA", service.generateOverview(1L).getDataStatus());
-        verify(model).chat(anyString());
-        verify(rag).retrieveRelevantKnowledge(any(), any(), any(), any(), any());
+        verify(model).complete(any());
 
         HealthRecord newRecord = new HealthRecord();
         newRecord.setId(99L);
@@ -124,28 +127,27 @@ class SmartHealthCacheTest {
         SmartHealthOverviewDTO result = service.generateOverview(1L);
         assertEquals("AVAILABLE", result.getDataStatus());
         assertNull(result.getMessage());
-        verify(model, times(2)).chat(anyString());
+        verify(model, times(2)).complete(any());
     }
 
     @Test
     void sportRecordAloneShouldAllowAnalysis() {
         health.clear();
         assertEquals("AVAILABLE", service.generateOverview(1L).getDataStatus());
-        verify(model).chat(anyString());
+        verify(model).complete(any());
     }
 
     @Test
     void unchangedDataShouldReuseOldReportAfterRestartWithoutTtlOrRagCalls() throws Exception {
         service.generateOverview(1L);
-        String key = "smart:overview:v2:1";
+        String key = "smart:overview:v3:1:1";
         SmartHealthServiceImpl.CachedOverview entry = json.readValue(cache.data.get(key), SmartHealthServiceImpl.CachedOverview.class);
         entry.overview().setGeneratedAt("2020-01-01T00:00:00");
         cache.data.put(key, json.writeValueAsString(entry));
         SmartHealthOverviewDTO reused = service().generateOverview(1L);
         assertEquals("2020-01-01T00:00:00", reused.getGeneratedAt());
         assertEquals("AI result", reused.getOverallStatus());
-        verify(model).chat(anyString());
-        verify(rag).retrieveRelevantKnowledge(any(), any(), any(), any(), any());
+        verify(model).complete(any());
         verify(cache.values, never()).set(anyString(), anyString(), any(Duration.class));
     }
 
@@ -169,7 +171,7 @@ class SmartHealthCacheTest {
             change.run();
             service.generateOverview(1L);
             service.generateOverview(1L);
-            verify(model, times(++count)).chat(anyString());
+            verify(model, times(++count)).complete(any());
         }
         assertEquals(1, cache.data.size(), "Only the latest report per user should be stored");
     }
@@ -186,12 +188,12 @@ class SmartHealthCacheTest {
         record.setContent("history note two");
         service.generateOverview(1L);
         service.generateOverview(1L);
-        ArgumentCaptor<String> prompts = ArgumentCaptor.forClass(String.class);
-        verify(model, times(3)).chat(prompts.capture());
-        assertTrue(prompts.getValue().contains("history note two"));
+        ArgumentCaptor<AiRequest> prompts = ArgumentCaptor.forClass(AiRequest.class);
+        verify(model, times(3)).complete(prompts.capture());
+        assertTrue(prompts.getValue().variables().get("historyRecords").contains("history note two"));
         history.clear();
         service.generateOverview(1L);
-        verify(model, times(4)).chat(anyString());
+        verify(model, times(4)).complete(any());
     }
 
     @Test
@@ -206,7 +208,7 @@ class SmartHealthCacheTest {
         user.setUsername("renamed");
         Collections.reverse(health);
         service.generateOverview(1L);
-        verify(model).chat(anyString());
+        verify(model).complete(any());
     }
 
     @Test
@@ -216,7 +218,7 @@ class SmartHealthCacheTest {
         });
         service.generateOverview(1L);
         assertEquals(2L, service.generateOverview(2L).getUserId());
-        verify(model, times(2)).chat(anyString());
+        verify(model, times(2)).complete(any());
         assertEquals(2, cache.data.size());
     }
 
@@ -224,7 +226,7 @@ class SmartHealthCacheTest {
     void concurrentRequestsShouldGenerateOnlyOnce() throws Exception {
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        when(model.chat(anyString())).thenAnswer(i -> {
+        when(model.complete(any())).thenAnswer(i -> {
             entered.countDown();
             assertTrue(release.await(3, TimeUnit.SECONDS));
             return "{\"overallStatus\":\"AI result\"}";
@@ -234,15 +236,37 @@ class SmartHealthCacheTest {
         CompletableFuture<SmartHealthOverviewDTO> second = CompletableFuture.supplyAsync(() -> service.generateOverview(1L));
         release.countDown();
         assertEquals(first.get(3, TimeUnit.SECONDS).getGeneratedAt(), second.get(3, TimeUnit.SECONDS).getGeneratedAt());
-        verify(model).chat(anyString());
-        verify(rag).retrieveRelevantKnowledge(any(), any(), any(), any(), any());
+        verify(model).complete(any());
     }
 
     @Test
-    void fallbackReportShouldAlsoBeReusedForUnchangedData() {
-        when(model.chat(anyString())).thenThrow(new RuntimeException("unavailable"));
+    void unavailableAiShouldReturnRulesAndRetryOnNextRefresh() {
+        when(model.complete(any())).thenThrow(new RuntimeException("unavailable"));
         SmartHealthOverviewDTO first = service.generateOverview(1L);
-        assertEquals(first.getGeneratedAt(), service().generateOverview(1L).getGeneratedAt());
-        verify(model).chat(anyString());
+        assertEquals("RULES",first.getAnalysisSource());
+        assertEquals("RULES",service().generateOverview(1L).getAnalysisSource());
+        verify(model,times(2)).complete(any());
     }
+    @Test void replacingOrDeletingKeyInvalidatesCachedAiReport() {
+        service.generateOverview(1L);
+        when(model.cacheScope(1L)).thenReturn("1:changed");
+        service.generateOverview(1L);
+        verify(model,times(2)).complete(any());
+        when(model.cacheScope(1L)).thenReturn("1:unconfigured");
+        when(model.prepare(anyLong(),eq("report"),anyMap(),anyList(),isNull()))
+                .thenThrow(new com.health.ai.AiServiceException("configure key"));
+        assertEquals("RULES",service.generateOverview(1L).getAnalysisSource());
+        verify(model,times(2)).complete(any());
+        assertEquals(1,cache.data.size());
+    }
+    @Test void twoCallersViewingSameFamilyMemberUseSeparateKeysAndCaches() {
+        when(model.payer(1L)).thenReturn(10L);
+        service.generateOverview(1L);
+        when(model.payer(1L)).thenReturn(20L);
+        service.generateOverview(1L);
+        verify(model).prepare(eq(10L),eq("report"),anyMap(),anyList(),isNull());
+        verify(model).prepare(eq(20L),eq("report"),anyMap(),anyList(),isNull());
+        assertEquals(2,cache.data.size());
+    }
+
 }

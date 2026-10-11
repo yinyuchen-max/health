@@ -141,18 +141,7 @@ const handleLogin = () => {
 
     loading.value = true
     try {
-      const response = await request.post('/user/login', loginForm)
-      const token = typeof response?.data === 'string'
-        ? response.data
-        : typeof response === 'string'
-          ? response
-          : ''
-
-      if (!token || token.trim().split('.').length !== 3) {
-        throw new Error('登录成功，但服务端返回的 token 格式无效')
-      }
-
-      userStore.setToken(token)
+      await userStore.login(loginForm)
 
       // 并行拉取用户信息与医生身份，减少移动端串行等待
       const [userInfoResult, doctorResult] = await Promise.allSettled([
@@ -160,24 +149,9 @@ const handleLogin = () => {
         request.get('/doctor/check')
       ])
 
-      if (userInfoResult.status === 'fulfilled') {
-        const responseData = userInfoResult.value?.data ?? userInfoResult.value
-        if (responseData) {
-          userStore.setUserInfo(responseData)
-        } else {
-          userStore.setUserInfo({
-            username: loginForm.username,
-            email: `${loginForm.username}@health-system.com`,
-            role: loginForm.username === 'admin' ? 'admin' : 'user'
-          })
-        }
-      } else {
-        userStore.setUserInfo({
-          username: loginForm.username,
-          email: `${loginForm.username}@health-system.com`,
-          role: loginForm.username === 'admin' ? 'admin' : 'user'
-        })
-      }
+      const userInfo = userInfoResult.status === 'fulfilled' ? userInfoResult.value?.data : null
+      if (!userInfo?.id) throw new Error('登录成功，但用户信息暂时不可用，请重试')
+      userStore.setUserInfo(userInfo)
 
       ElMessage.success({
         message: '登录成功',

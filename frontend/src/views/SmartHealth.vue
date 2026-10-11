@@ -57,6 +57,8 @@
       </div>
     </el-card>
 
+    <el-alert v-if="!loading && overview?.analysisSource === 'RULES'" type="info" :closable="false" :title="overview.message" style="margin-bottom: 16px" />
+    <el-button text @click="$router.push('/app/ai-settings')">AI 设置 · 配置自己的 API Key</el-button>
     <HealthDataNotice v-if="!loading && noData" :message="overview?.message" />
 
     <template v-if="!loading && overview && !noData">
@@ -173,6 +175,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import request from '../utils/request'
+import { runtime } from '../config/runtime'
 import { useUserStore } from '../store/user'
 import { useAnalyticsStore } from '../store/analytics'
 import { ElMessage } from 'element-plus'
@@ -435,7 +438,7 @@ const refreshData = async () => {
     const [overviewResponse, sportRecordsResponse] = await Promise.all([
       request.get('/smart-health/overview', {
         params: { userId },
-        timeout: 90000  // AI 分析需要较长时间，单独设置 90 秒超时
+        timeout: runtime.smartHealthTimeoutMs
       }),
       analyticsStore.fetchSportRecords(userId, { pageNum: 1, pageSize: 1000 })
     ])

@@ -1,10 +1,12 @@
 const { logout } = require('../../utils/auth')
+const { get } = require('../../utils/request')
 
 Page({
   data: {
     userInfo: {},
     userInitial: '',
-    roleLabel: ''
+    roleLabel: '',
+    familyNoticeCount: 0
   },
 
   onShow() {
@@ -18,6 +20,23 @@ Page({
     const roleLabel = roleMap[userInfo.role] || '普通用户'
 
     this.setData({ userInfo, userInitial, roleLabel })
+    this.loadFamilyNotices()
+  },
+
+  async loadFamilyNotices() {
+    try {
+      const [members, reminders] = await Promise.all([
+        get('/api/family/members', {}, { showLoading: false, showError: false }),
+        get('/api/family/reminders', {}, { showLoading: false, showError: false })
+      ])
+      const familyNoticeCount = members.filter(m => m.status === 'PENDING' && m.incoming).length
+        + reminders.filter(r => !r.readStatus).length
+      this.setData({ familyNoticeCount })
+    } catch { this.setData({ familyNoticeCount: 0 }) }
+  },
+
+  goFamily() {
+    wx.navigateTo({ url: '/pages/family/family' })
   },
 
   goHealthRecord() {
@@ -47,6 +66,8 @@ Page({
   goProfile() {
     wx.navigateTo({ url: '/pages/user-profile/user-profile' })
   },
+
+  goAiSettings() { wx.navigateTo({ url: '/pages/ai-settings/ai-settings' }) },
 
   goReminder() {
     wx.navigateTo({ url: '/pages/reminder/reminder' })

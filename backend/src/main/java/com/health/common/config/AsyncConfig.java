@@ -31,27 +31,30 @@ public class AsyncConfig implements AsyncConfigurer {
 
     private static final Logger log = LoggerFactory.getLogger(AsyncConfig.class);
 
-    private static final int CPU_COUNT = Runtime.getRuntime().availableProcessors();
+    private final RuntimeSettings settings;
+
+    public AsyncConfig(RuntimeSettings settings) { this.settings = settings; }
 
     @Bean("asyncExecutor")
     @Override
     public Executor getAsyncExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        // IO 密集型：核心线程 = CPU * 2
-        executor.setCorePoolSize(CPU_COUNT * 2);
-        executor.setMaxPoolSize(CPU_COUNT * 4);
-        executor.setQueueCapacity(200);
-        executor.setKeepAliveSeconds(60);
+        RuntimeSettings.Async policy = settings.getAsync();
+        // 未显式配置线程数时仍按 CPU 核数自动计算。
+        executor.setCorePoolSize(policy.effectiveCorePoolSize());
+        executor.setMaxPoolSize(policy.effectiveMaxPoolSize());
+        executor.setQueueCapacity(policy.getQueueCapacity());
+        executor.setKeepAliveSeconds((int) policy.getKeepAlive().toSeconds());
         // 线程命名格式：health-async-{序号}
         executor.setThreadNamePrefix("health-async-");
         // 拒绝策略：由调用线程执行，保证任务不丢失
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         // 优雅关闭：等待任务完成
         executor.setWaitForTasksToCompleteOnShutdown(true);
-        executor.setAwaitTerminationSeconds(60);
+        executor.setAwaitTerminationSeconds((int) policy.getShutdownWait().toSeconds());
         executor.initialize();
         log.info("异步线程池初始化完成: corePoolSize={}, maxPoolSize={}, queueCapacity={}, cpuCount={}",
-                executor.getCorePoolSize(), executor.getMaxPoolSize(), 200, CPU_COUNT);
+                executor.getCorePoolSize(), executor.getMaxPoolSize(), policy.getQueueCapacity(), Runtime.getRuntime().availableProcessors());
         return executor;
     }
 

@@ -2,6 +2,7 @@ package com.health.domain.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -10,6 +11,10 @@ import java.math.BigDecimal;
 public class HealthRecordDTO {
     @NotNull(message = "用户ID不能为空")
     private Long userId;
+
+    // 修改时必须携带读取记录时的版本；新增时由服务端初始化。
+    @PositiveOrZero(message = "版本号不能为负数")
+    private Integer version;
 
     private Double bloodPressureSystolic;
     private Double bloodPressureDiastolic;

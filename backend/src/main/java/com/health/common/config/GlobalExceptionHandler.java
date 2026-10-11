@@ -1,13 +1,19 @@
 package com.health.common.config;
 
 import com.health.common.exception.BusinessException;
+import com.health.common.exception.AuthStoreUnavailableException;
 import com.health.common.exception.ForbiddenException;
 import com.health.common.exception.RateLimitException;
+import com.health.common.exception.RecordConflictException;
 import com.health.common.exception.UnauthorizedException;
 import com.health.common.utils.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -17,6 +23,28 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Result<?>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e,
+                                                              HttpServletRequest request) {
+        log.warn("请求方法不支持: method={}, path={}", request.getMethod(), request.getRequestURI());
+        var headers = new HttpHeaders();
+        if (e.getSupportedHttpMethods() != null) headers.setAllow(e.getSupportedHttpMethods());
+        return new ResponseEntity<>(Result.failed("请求方式不支持，请刷新页面后重试").setCode(405),
+                headers, HttpStatus.METHOD_NOT_ALLOWED);
+    }
+
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    @ExceptionHandler(AuthStoreUnavailableException.class)
+    public Result<?> handleAuthStoreUnavailable(AuthStoreUnavailableException e) {
+        return Result.failed(e.getMessage()).setCode(503);
+    }
+
+    @ResponseStatus(HttpStatus.CONFLICT)
+    @ExceptionHandler(RecordConflictException.class)
+    public Result<?> handleRecordConflictException(RecordConflictException e) {
+        return Result.failed(e.getMessage()).setCode(409);
+    }
 
     /**
      * 处理业务异常（Service 层主动抛出的校验失败）

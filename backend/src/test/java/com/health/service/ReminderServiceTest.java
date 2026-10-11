@@ -21,6 +21,7 @@ import static org.mockito.Mockito.when;
 
 class ReminderServiceTest {
 
+    @org.mockito.Spy
     @InjectMocks
     private ReminderServiceImpl reminderService;
 

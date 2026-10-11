@@ -1,0 +1,8 @@
+.report-page { padding: 24rpx; padding-bottom: 60rpx; }
+.title { display: block; font-size: 36rpx; font-weight: 700; margin-bottom: 14rpx; }
+.section-title { display: block; font-size: 30rpx; font-weight: 600; margin-bottom: 16rpx; }
+.hint { display: block; color: #9ca3af; font-size: 24rpx; line-height: 1.7; margin: 12rpx 0; }
+.paragraph { display: block; color: #4b5563; line-height: 1.8; margin: 12rpx 0; }
+.risk { display: inline-block; background: #ecfdf5; color: #059669; padding: 8rpx 16rpx; border-radius: 12rpx; }
+.risk-MEDIUM { background: #fffbeb; color: #d97706; } .risk-HIGH { background: #fef2f2; color: #dc2626; }
+.error { color: #ef4444; } .btn-primary { margin-top: 28rpx; }

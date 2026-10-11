@@ -12,9 +12,12 @@
       </div>
     </div>
 
+    <el-alert v-if="departmentsError" :title="departmentsError" type="error" :closable="false">
+      <el-button text @click="reloadDepartments">重试</el-button>
+    </el-alert>
     <!-- 科室筛选 -->
     <div class="filter-bar">
-      <el-radio-group v-model="selectedDept" @change="fetchDoctors" size="large">
+      <el-radio-group v-model="selectedDept" :disabled="departmentsLoading" @change="fetchDoctors" size="large">
         <el-radio-button value="">全部科室</el-radio-button>
         <el-radio-button v-for="dept in departments" :key="dept" :value="dept">{{ dept }}</el-radio-button>
       </el-radio-group>
@@ -56,21 +59,19 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { FirstAidKit } from '@element-plus/icons-vue'
 import request from '../utils/request'
+import { useDepartments } from '../composables/useDepartments'
 
 const router = useRouter()
 const loading = ref(false)
 const doctors = ref([])
 const selectedDept = ref('')
 
-const departments = [
-  '内科', '外科', '儿科', '妇科', '皮肤科', '眼科', '耳鼻喉科', '口腔科',
-  '骨科', '神经内科', '心血管内科', '消化内科', '呼吸内科', '泌尿外科'
-]
+const { departments, departmentsLoading, departmentsError, reloadDepartments } = useDepartments()
 
 const fetchDoctors = async () => {
   loading.value = true
   try {
-    const params = selectedDept.value ? `?department=${selectedDept.value}` : ''
+    const params = selectedDept.value ? `?department=${encodeURIComponent(selectedDept.value)}` : ''
     const res = await request.get(`/doctor/list${params}`)
     doctors.value = res?.data || res || []
   } catch {

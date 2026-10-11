@@ -1,0 +1,31 @@
+server:
+  address: ${AI_BIND_ADDRESS:127.0.0.1}
+  port: ${AI_PORT:8081}
+  error:
+    include-message: never
+spring:
+  config:
+    import:
+      - "optional:file:./health/.env[.properties]"
+      - "optional:file:../.env[.properties]"
+      - "optional:file:./.env[.properties]"
+  data:
+    redis:
+      host: ${AI_REDIS_HOST:${REDIS_HOST:localhost}}
+      port: ${AI_REDIS_PORT:${REDIS_PORT:6379}}
+      password: ${AI_REDIS_PASSWORD:${REDIS_PASSWORD:}}
+      database: ${AI_REDIS_DATABASE:1}
+      timeout: 2s
+ai:
+  service-secret: ${AI_SERVICE_SECRET}
+  timeout-seconds: ${AI_MODEL_TIMEOUT_SECONDS:60}
+  max-concurrent: ${AI_MAX_CONCURRENT:8}
+  prompts:
+    directory: ${AI_PROMPTS_DIRECTORY:./prompts}
+  knowledge:
+    document: ${AI_KNOWLEDGE_DOCUMENT:classpath:rag/health-knowledge.md}
+    max-snippets: ${RAG_MAX_SNIPPETS:6}
+    min-score: ${RAG_MIN_SCORE:0.1}
+logging:
+  level:
+    dev.langchain4j: WARN

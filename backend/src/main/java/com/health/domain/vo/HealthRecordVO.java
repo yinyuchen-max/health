@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public class HealthRecordVO {
     private Long id;
     private Long userId;
+    private Integer version;
     private Double bloodPressureSystolic;
     private Double bloodPressureDiastolic;
     private Integer heartRate;

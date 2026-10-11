@@ -1,6 +1,8 @@
 package com.health.common.config;
 
 import com.health.common.filter.JwtAuthenticationFilter;
+import com.health.common.filter.TrafficProtectionFilter;
+import com.health.common.security.AuthCookies;
 import com.health.common.utils.Result;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.DispatcherType;
@@ -8,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -17,6 +20,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.firewall.StrictHttpFirewall;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.util.matcher.DispatcherTypeRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -30,17 +34,20 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+@Import(TrafficProtectionConfig.class)
 public class SecurityConfig implements WebMvcConfigurer {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ObjectMapper objectMapper;
+    private final AuthCookies authCookies;
 
     @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:80}")
     private String allowedOrigins;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, ObjectMapper objectMapper) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, ObjectMapper objectMapper, AuthCookies authCookies) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.objectMapper = objectMapper;
+        this.authCookies = authCookies;
     }
 
     @Override
@@ -53,13 +60,16 @@ public class SecurityConfig implements WebMvcConfigurer {
      * 配置安全过滤链
      */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, TrafficProtectionFilter trafficProtectionFilter) throws Exception {
         http
             // CORS 跨域配置
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-            // 禁用 CSRF（无状态 API 不需要）
-            .csrf(csrf -> csrf.disable())
+            // Only these browser endpoints use automatically attached credentials.
+            // Keep Spring's masked CSRF tokens; all business APIs still require explicit Bearer headers.
+            .csrf(csrf -> csrf.csrfTokenRepository(authCookies).requireCsrfProtectionMatcher(request ->
+                "POST".equals(request.getMethod()) && List.of("/api/user/login", "/api/user/refresh", "/api/user/web-logout")
+                    .contains(request.getRequestURI())))
 
             // 无状态会话
             .sessionManagement(session -> session
@@ -74,7 +84,7 @@ public class SecurityConfig implements WebMvcConfigurer {
                 // 初始 REQUEST 已完成认证授权，放行 ASYNC 分发是安全的。
                 .requestMatchers(new DispatcherTypeRequestMatcher(DispatcherType.ASYNC)).permitAll()
                 // 公开接口：登录、注册、微信登录、医生列表、医生注册
-                .requestMatchers("/api/user/login", "/api/user/register", "/api/user/wechat-login", "/api/doctor/list", "/api/doctor/full-register").permitAll()
+                .requestMatchers("/api/user/csrf", "/api/user/refresh", "/api/user/native-refresh", "/api/user/web-logout", "/api/user/native-logout", "/api/user/native-login", "/api/user/login", "/api/user/register", "/api/user/wechat-login", "/api/doctor/list", "/api/doctor/departments", "/api/doctor/full-register").permitAll()
                 // 管理员接口：需要 ADMIN 角色（URL 层第一道防线，方法内 requireAdmin 查库二次校验）
                 .requestMatchers("/api/user/admin/**", "/api/doctor/admin/**").hasRole("ADMIN")
                 // 其他所有 /api/** 接口需要认证
@@ -99,7 +109,9 @@ public class SecurityConfig implements WebMvcConfigurer {
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     response.setCharacterEncoding("UTF-8");
-                    Result<?> result = Result.failed("权限不足");
+                    Result<?> result = accessDeniedException instanceof CsrfException
+                            ? Result.failed("登录验证已失效，请重试").setData(java.util.Map.of("reason", "CSRF"))
+                            : Result.failed("权限不足");
                     result.setCode(403);
                     response.getWriter().write(objectMapper.writeValueAsString(result));
                 })
@@ -121,7 +133,8 @@ public class SecurityConfig implements WebMvcConfigurer {
             )
 
             // 添加 JWT 过滤器
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(trafficProtectionFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
@@ -135,8 +148,8 @@ public class SecurityConfig implements WebMvcConfigurer {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
-        config.setExposedHeaders(List.of("Authorization"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "X-CSRF-TOKEN"));
+        config.setExposedHeaders(List.of("Authorization", "Retry-After"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L); // 预检请求缓存 1 小时
 

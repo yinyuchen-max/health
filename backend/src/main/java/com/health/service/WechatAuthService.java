@@ -2,7 +2,7 @@ package com.health.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.health.common.exception.BusinessException;
-import com.health.common.utils.JwtUtil;
+import com.health.domain.dto.AuthTokens;
 import com.health.domain.dto.WechatLoginDTO;
 import com.health.domain.dto.WechatLoginResponseDTO;
 import com.health.domain.entity.User;
@@ -41,14 +41,14 @@ public class WechatAuthService {
     private String appSecret;
 
     private final UserMapper userMapper;
-    private final JwtUtil jwtUtil;
+    private final AuthSessionService authSessions;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final StringRedisTemplate redisTemplate;
 
-    public WechatAuthService(UserMapper userMapper, JwtUtil jwtUtil, ObjectMapper objectMapper, StringRedisTemplate redisTemplate) {
+    public WechatAuthService(UserMapper userMapper, AuthSessionService authSessions, ObjectMapper objectMapper, StringRedisTemplate redisTemplate) {
         this.userMapper = userMapper;
-        this.jwtUtil = jwtUtil;
+        this.authSessions = authSessions;
         this.restTemplate = new RestTemplate();
         this.objectMapper = objectMapper;
         this.redisTemplate = redisTemplate;
@@ -77,11 +77,14 @@ public class WechatAuthService {
         }
 
         // 5. 签发 JWT
-        String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
+        AuthTokens tokens = authSessions.issue(user, AuthSessionService.NATIVE);
 
         // 6. 构造响应
         WechatLoginResponseDTO response = new WechatLoginResponseDTO();
-        response.setToken(token);
+        response.setToken(tokens.token());
+        response.setRefreshToken(tokens.refreshToken());
+        response.setExpiresIn(tokens.expiresIn());
+        response.setRefreshExpiresAt(tokens.refreshExpiresAt());
 
         UserVO userVO = new UserVO();
         userVO.setId(user.getId());
@@ -103,7 +106,7 @@ public class WechatAuthService {
      * 调用微信 code2Session 接口
      */
     private String code2Session(String code) {
-        log.info("微信 code2Session 请求：appid={}, code={}", appId, code);
+        log.debug("请求微信登录身份验证");
         
         String url = CODE2SESSION_URL
                 .replace("{appid}", appId)
@@ -113,7 +116,7 @@ public class WechatAuthService {
         try {
             // 微信 API 返回 text/plain，先用 String 接收再解析
             String responseStr = restTemplate.getForObject(url, String.class);
-            log.info("微信 code2Session 响应：{}", responseStr);
+
             
             if (responseStr == null || responseStr.isBlank()) {
                 log.error("微信 code2Session 失败：响应为空");
@@ -145,11 +148,9 @@ public class WechatAuthService {
             return openid;
         } catch (BusinessException e) {
             throw e;
-        } catch (RuntimeException e) {
-            throw e;
         } catch (Exception e) {
-            log.error("微信 code2Session 异常：{}", e.getMessage(), e);
-            throw new BusinessException("微信登录异常：" + e.getMessage());
+            log.error("微信 code2Session 调用失败");
+            throw new BusinessException("微信登录暂时不可用，请稍后重试");
         }
     }
 

@@ -6,6 +6,7 @@ Page({
     latestRecord: null,
     showForm: false,
     editingId: null,
+    editingVersion: null,
     saving: false,
     form: {
       recordDate: '',
@@ -42,6 +43,7 @@ Page({
     this.setData({
       showForm: true,
       editingId: null,
+      editingVersion: null,
       form: {
         recordDate: new Date().toISOString().slice(0, 10),
         bloodPressureSystolic: '',
@@ -55,7 +57,7 @@ Page({
   },
 
   closeForm() {
-    this.setData({ showForm: false, editingId: null })
+    this.setData({ showForm: false, editingId: null, editingVersion: null })
   },
 
   editRecord(e) {
@@ -66,6 +68,7 @@ Page({
     this.setData({
       showForm: true,
       editingId: id,
+      editingVersion: record.version,
       form: {
         recordDate: record.recordDate || '',
         bloodPressureSystolic: record.bloodPressureSystolic || '',
@@ -109,7 +112,7 @@ Page({
   },
 
   async submitForm() {
-    const { form, editingId } = this.data
+    const { form, editingId, editingVersion } = this.data
     if (!form.recordDate) {
       wx.showToast({ title: '请选择日期', icon: 'none' })
       return
@@ -119,6 +122,7 @@ Page({
     try {
       // 转换数字字段
       const data = {
+        userId: getApp().globalData.userInfo?.id,
         recordDate: form.recordDate,
         bloodPressureSystolic: form.bloodPressureSystolic ? Number(form.bloodPressureSystolic) : null,
         bloodPressureDiastolic: form.bloodPressureDiastolic ? Number(form.bloodPressureDiastolic) : null,
@@ -128,9 +132,8 @@ Page({
         notes: form.notes
       }
 
-      console.log('提交数据:', data)
-
       if (editingId) {
+        data.version = editingVersion
         await put(`/api/health/record/${editingId}`, data)
         wx.showToast({ title: '更新成功', icon: 'success' })
       } else {
@@ -143,6 +146,8 @@ Page({
     } catch (err) {
       console.error('保存失败:', err)
       wx.showToast({ title: err.message || '保存失败', icon: 'none' })
+      // 冲突后保留编辑内容及旧版本，刷新列表供用户重新选择最新记录。
+      if (err.status === 409) await this.loadRecords()
     } finally {
       this.setData({ saving: false })
     }

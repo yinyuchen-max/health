@@ -4,7 +4,7 @@ services:
     container_name: health-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       MYSQL_DATABASE: health_system
       TZ: Asia/Shanghai
     ports:
@@ -12,7 +12,7 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
       # 数据库 schema 不再通过 initdb.d 初始化，改由后端启动时 Flyway 自动迁移
-      # （backend/src/main/resources/db/migration/V1-V5）
+      # （backend/src/main/resources/db/migration/V1-V8）
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -47,7 +47,7 @@ services:
       - "127.0.0.1:15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-admin123}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:?RABBITMQ_PASS is required}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
@@ -68,34 +68,61 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/health_system?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      HEALTH_RAG_REDIS_HOST: redis
-      HEALTH_RAG_REDIS_PORT: 6379
-      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required}"
-      DASHSCOPE_API_KEY: "${DASHSCOPE_API_KEY:?DASHSCOPE_API_KEY is required}"
-      EMBEDDING_MODEL_NAME: "${EMBEDDING_MODEL_NAME:-text-embedding-v4}"
-      EMBEDDING_BASE_URL: "${EMBEDDING_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}"
+      AI_SERVICE_URL: http://ai-service:8081
+      AI_SERVICE_SECRET: ${AI_SERVICE_SECRET:?AI_SERVICE_SECRET is required}
+      AI_KEY_ENCRYPTION_KEY: ${AI_KEY_ENCRYPTION_KEY:?AI_KEY_ENCRYPTION_KEY is required}
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:80}"
       MAIL_HOST: "${MAIL_HOST:-smtp.qq.com}"
       MAIL_PORT: "${MAIL_PORT:-465}"
       MAIL_USERNAME: "${MAIL_USERNAME:-2212169296@qq.com}"
-      MAIL_PASSWORD: "${MAIL_PASSWORD:-vprekpwostsvecij}"
+      MAIL_PASSWORD: "${MAIL_PASSWORD:-}"
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: "${RABBITMQ_USER:-admin}"
-      RABBITMQ_PASS: "${RABBITMQ_PASS:-admin123}"
+      RABBITMQ_PASS: "${RABBITMQ_PASS:?RABBITMQ_PASS is required}"
       TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:8080:8080"
 
+  ai-service:
+    build:
+      context: ./ai-service
+    container_name: health-ai-service
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      AI_BIND_ADDRESS: 0.0.0.0
+      AI_SERVICE_SECRET: ${AI_SERVICE_SECRET:?AI_SERVICE_SECRET is required}
+      AI_REDIS_HOST: redis
+      AI_REDIS_PORT: 6379
+      AI_REDIS_PASSWORD: ${AI_REDIS_PASSWORD:-${REDIS_PASSWORD:-}}
+      AI_REDIS_DATABASE: ${AI_REDIS_DATABASE:-1}
+      AI_MODEL_TIMEOUT_SECONDS: ${AI_MODEL_TIMEOUT_SECONDS:-60}
+      AI_MAX_CONCURRENT: ${AI_MAX_CONCURRENT:-8}
+      RAG_MAX_SNIPPETS: ${RAG_MAX_SNIPPETS:-6}
+      RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.1}
+      AI_KNOWLEDGE_DOCUMENT: ${AI_KNOWLEDGE_DOCUMENT:-classpath:rag/health-knowledge.md}
+      TZ: Asia/Shanghai
+    # Only reachable on the Compose network; no public host port and no MySQL credentials.
+    expose:
+      - "8081"
+
   frontend:
     build:
       context: ./frontend
+      args:
+        VITE_REQUEST_TIMEOUT_MS: "${VITE_REQUEST_TIMEOUT_MS:-}"
+        VITE_SMART_HEALTH_TIMEOUT_MS: "${VITE_SMART_HEALTH_TIMEOUT_MS:-}"
     container_name: health-frontend
     restart: unless-stopped
     depends_on:

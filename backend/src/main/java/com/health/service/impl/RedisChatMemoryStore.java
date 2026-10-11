@@ -1,6 +1,6 @@
 package com.health.service.impl;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.health.common.config.RuntimeSettings;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ChatMessageType;
@@ -12,11 +12,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Redis 聊天记忆存储
- * 使用 Redis List 存储用户对话历史，支持 7 天自动过期
+ * 使用 Redis List 存储用户对话历史，支持可配置的消息窗口与过期时间
  */
 @Component
 public class RedisChatMemoryStore implements ChatMemoryStore {
@@ -25,15 +24,13 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
 
     /** Redis key 前缀 */
     private static final String CHAT_MEMORY_PREFIX = "chat:memory:";
-    /** 默认最大消息数 */
-    private static final long MAX_MESSAGES = 20;
-    /** 默认过期时间：7 天 */
-    private static final long EXPIRE_DAYS = 7;
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final RuntimeSettings settings;
 
-    public RedisChatMemoryStore(RedisTemplate<String, Object> redisTemplate) {
+    public RedisChatMemoryStore(RedisTemplate<String, Object> redisTemplate, RuntimeSettings settings) {
+        this.settings = settings;
         this.redisTemplate = redisTemplate;
         this.objectMapper = new ObjectMapper();
     }
@@ -75,9 +72,10 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
                 return;
             }
 
-            // 只保留最近 MAX_MESSAGES 条消息
-            List<ChatMessage> trimmed = messages.size() > MAX_MESSAGES
-                    ? messages.subList(messages.size() - (int) MAX_MESSAGES, messages.size())
+            int maxMessages = settings.getChatMemory().getMaxMessages();
+            // 与发送给模型的消息窗口共用同一个配置。
+            List<ChatMessage> trimmed = messages.size() > maxMessages
+                    ? messages.subList(messages.size() - maxMessages, messages.size())
                     : messages;
 
             // 批量写入
@@ -88,7 +86,7 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
             }
 
             // 设置过期时间
-            redisTemplate.expire(key, EXPIRE_DAYS, TimeUnit.DAYS);
+            redisTemplate.expire(key, settings.getChatMemory().getTtl());
 
             log.debug("更新聊天记忆: memoryId={}, 消息数={}", memoryId, trimmed.size());
         } catch (Exception e) {

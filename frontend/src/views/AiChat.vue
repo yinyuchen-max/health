@@ -9,11 +9,12 @@
         <div class="header-text">
           <div class="header-title-row">
             <h2>AI 健康顾问</h2>
-            <span class="model-badge">DeepSeek · 流式回复</span>
+            <span class="model-badge">个人模型 · 流式回复</span>
           </div>
           <p>健康、饮食、运动、睡眠…… 有问题尽管问（也可以说「预约」来预约医生）</p>
         </div>
       </div>
+      <el-button text @click="$router.push('/app/ai-settings')">配置 API Key</el-button>
       <el-button
         v-if="messages.length > 0"
         text
@@ -166,6 +167,7 @@
 </template>
 
 <script setup>
+import { authenticatedFetch } from '../utils/auth'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import {
   ArrowDown,
@@ -350,9 +352,8 @@ const streamReply = async (userText, msgIdx) => {
     const base = (import.meta.env.VITE_API_BASE_URL?.trim() || '/api').replace(/\/+$/, '')
     const url = `${base}/chat/send/stream`
     const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream' }
-    if (userStore.token) headers.Authorization = `Bearer ${userStore.token.trim()}`
 
-    const res = await fetch(url, {
+    const res = await authenticatedFetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify({ message: userText }),

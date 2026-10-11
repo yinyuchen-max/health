@@ -2,3 +2,5 @@
 backend/src/main/resources/application.yml
 
 
+
+ai-service/target/

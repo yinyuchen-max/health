@@ -1,86 +1,43 @@
 import axios from 'axios'
+import { runtime } from '../config/runtime'
 import { useUserStore } from '../store/user'
+import { apiBaseUrl, ensureSession, authState } from './auth'
 
-const isLikelyJwt = (value) => typeof value === 'string' && value.trim().split('.').length === 3
-const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
-const resolvedBaseUrl = configuredBaseUrl || '/api'
+const publicPaths = new Set(['/user/login', '/user/register', '/doctor/full-register', '/doctor/list', '/doctor/departments'])
+const request = axios.create({ baseURL: apiBaseUrl, timeout: runtime.requestTimeoutMs,
+  headers: { 'Content-Type': 'application/json' } })
 
-// Create reusable request instance
-const request = axios.create({
-  // 本地开发使用空字符串（走Vite proxy）
-  // 生产环境通过环境变量 VITE_API_BASE_URL 配置后端地址
-  baseURL: resolvedBaseUrl,
-  timeout: 15000,
-  headers: {
-    'Content-Type': 'application/json'
+request.interceptors.request.use(async config => {
+  if (!publicPaths.has(config.url)) {
+    const token = await ensureSession()
+    if (token) config.headers.Authorization = `Bearer ${token}`
+    else delete config.headers.Authorization
   }
+  if (config.method === 'get') config.params = { ...config.params, _t: Date.now() }
+  return config
 })
-
-// Performance optimization: Request cache for GET requests
-const requestCache = new Map()
-
-// Request interceptor with optimized user store access
-request.interceptors.request.use(
-  config => {
-    const userStore = useUserStore()
-    if (isLikelyJwt(userStore.token)) {
-      config.headers.Authorization = `Bearer ${userStore.token.trim()}`
-    } else if (userStore.token) {
-      userStore.logout()
+request.interceptors.response.use(response => response.data || response, async error => {
+  const config = error.config
+  if (error.response?.status === 401 && config && !config._authRetried && !publicPaths.has(config.url)) {
+    config._authRetried = true
+    const sentToken = String(config.headers?.Authorization || '').replace(/^Bearer /, '')
+    try {
+      const token = await ensureSession(true, sentToken)
+      if (token) return request(config)
+    } catch (refreshError) {
+      return Promise.reject({ message: refreshError.response?.data?.message || '认证服务暂时不可用',
+        status: refreshError.response?.status })
     }
-
-    // Add cache-busting parameter for GET requests to prevent stale data
-    if (config.method === 'get') {
-      config.params = {
-        ...config.params,
-        _t: Date.now() // Cache busting
-      }
-    }
-
-    return config
-  },
-  error => {
-    console.warn('Request configuration error:', error.message)
-    return Promise.reject(error)
   }
-)
-
-// Response interceptor with graceful error handling
-request.interceptors.response.use(
-  response => {
-    // Extract data efficiently
-    return response.data || response
-  },
-  error => {
-    // Handle authentication errors gracefully
-    if (error.response?.status === 401) {
-      try {
-        const userStore = useUserStore()
-        userStore.logout()
-        // Use router push instead of location change for better SPA experience
-        if (window.VueRouter) {
-          window.VueRouter.push('/')
-        } else {
-          window.location.href = '/'
-        }
-      } catch (logoutError) {
-        console.error('Logout failed:', logoutError)
-        window.location.href = '/'
-      }
+  if (error.response?.status === 401 && !publicPaths.has(config?.url)) {
+    // A newer sign-in must not be cleared by a delayed response from the old session.
+    const sentToken = String(config?.headers?.Authorization || '').replace(/^Bearer /, '')
+    if (!authState.token || sentToken === authState.token) {
+      useUserStore().clearSession()
+      window.location.assign('/')
     }
-
-    // Provide meaningful error messages for debugging
-    const errorMessage = error.response?.data?.message ||
-                        error.message ||
-                        'Network request failed'
-
-    console.warn('API request failed:', errorMessage)
-    return Promise.reject({
-      message: errorMessage,
-      status: error.response?.status,
-      originalError: error
-    })
   }
-)
-
+  return Promise.reject({ message: error.response?.data?.message || error.message || '请求失败',
+    status: error.response?.status })
+})
 export default request

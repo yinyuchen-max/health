@@ -10,17 +10,17 @@ import com.health.service.AppointmentInformationExtractor;
 import com.health.service.DoctorAppointmentService;
 import com.health.service.DoctorService;
 import com.health.service.UserService;
+import com.health.service.DepartmentCatalog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,11 +29,6 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
 
     private static final Logger log = LoggerFactory.getLogger(AppointmentConversationServiceImpl.class);
     private static final String APPOINTMENT_OFFER = "如果您需要，我也可以帮您预约医生。是否需要预约？";
-    private static final List<String> DEPARTMENTS = List.of(
-            "内科", "外科", "儿科", "妇科", "皮肤科", "眼科", "耳鼻喉科", "口腔科",
-            "骨科", "神经内科", "心血管内科", "消化内科", "呼吸内科", "泌尿外科"
-    );
-    private static final Map<String, String> DEPARTMENT_ALIASES = createDepartmentAliases();
     private static final DateTimeFormatter APPOINTMENT_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm");
 
@@ -41,17 +36,20 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
     private final AppointmentInformationExtractor appointmentInformationExtractor;
     private final DoctorService doctorService;
     private final UserService userService;
+    private final DepartmentCatalog departmentCatalog;
     private final ConcurrentHashMap<Object, AppointmentDraft> drafts = new ConcurrentHashMap<>();
     private final Set<Object> offeredUsers = ConcurrentHashMap.newKeySet();
 
     public AppointmentConversationServiceImpl(DoctorAppointmentService doctorAppointmentService,
                                               AppointmentInformationExtractor appointmentInformationExtractor,
                                               DoctorService doctorService,
-                                              UserService userService) {
+                                              UserService userService,
+                                              DepartmentCatalog departmentCatalog) {
         this.doctorAppointmentService = doctorAppointmentService;
         this.appointmentInformationExtractor = appointmentInformationExtractor;
         this.doctorService = doctorService;
         this.userService = userService;
+        this.departmentCatalog = departmentCatalog;
     }
 
     @Override
@@ -110,10 +108,10 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
             return buildMissingFieldsReply(missingFields, validationErrors);
         }
 
-        if (!draft.appointmentTime.isAfter(LocalDateTime.now())) {
+        if (!draft.appointmentTime.isAfter(LocalDateTime.now(ZoneId.of("Asia/Shanghai")))) {
             draft.appointmentTime = null;
             draft.awaitingConfirmation = false;
-            return "预约时间必须晚于当前时间。无法使用该预约时间，请重新提供，例如：2026-07-30 09:30。";
+            return "预约时间必须晚于当前时间。无法使用该预约时间，请重新提供，例如：" + exampleAppointmentTime() + "。";
         }
 
         // 信息完整：若尚未选择医生且该科室有可约医生，先引导用户选择医生
@@ -169,7 +167,7 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
                 draft.appointmentTime = appointmentTime;
                 updated = true;
             } else {
-                validationErrors.add("无法识别预约时间，请提供完整日期和时间，例如：2026-07-30 09:30");
+                validationErrors.add("无法识别预约时间，请提供完整日期和时间，例如：" + exampleAppointmentTime());
             }
         }
 
@@ -355,15 +353,16 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
         }
         reply.append("已从您的账号自动填入个人信息。")
                 .append("目前还缺少：").append(String.join("、", missingFields)).append("。\n")
-                .append("可预约科室：").append(String.join("、", DEPARTMENTS)).append("。\n")
-                .append("您只需提供缺少的信息，例如：预约时间：2026-07-30 09:30，科室：泌尿外科。");
+                .append("可预约科室：").append(String.join("、", departmentCatalog.names())).append("。\n")
+                .append("您只需提供缺少的信息，例如：预约时间：").append(exampleAppointmentTime())
+                .append("，科室：泌尿外科。");
         return reply.toString();
     }
 
     private String buildExtractionFailureReply(AppointmentDraft draft) {
         return "暂时无法识别您提供的预约信息。目前还缺少："
                 + String.join("、", draft.missingFields())
-                + "。个人信息已从账号自动填入，您只需提供缺少的内容，例如：预约时间：2026-07-30 09:30，科室：泌尿外科。";
+                + "。个人信息已从账号自动填入，您只需提供缺少的内容，例如：预约时间：" + exampleAppointmentTime() + "，科室：泌尿外科。";
     }
 
     /**
@@ -395,6 +394,11 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
         }
     }
 
+    private String exampleAppointmentTime() {
+        return LocalDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalDate()
+                .plusDays(1).atTime(9, 30).format(APPOINTMENT_TIME_FORMATTER);
+    }
+
     private LocalDateTime parseAppointmentTime(String value) {
         try {
             return LocalDateTime.parse(value.trim(), APPOINTMENT_TIME_FORMATTER);
@@ -421,11 +425,7 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
     }
 
     private String normalizeDepartment(String value) {
-        String department = value.trim();
-        if (DEPARTMENTS.contains(department)) {
-            return department;
-        }
-        return DEPARTMENT_ALIASES.get(department);
+        return departmentCatalog.normalize(value);
     }
 
     private boolean shouldStartAppointment(String message, Object conversationId) {
@@ -435,8 +435,7 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
     }
 
     private boolean hasLikelyAppointmentDetails(String message) {
-        boolean containsDepartment = DEPARTMENTS.stream().anyMatch(message::contains)
-                || DEPARTMENT_ALIASES.keySet().stream().anyMatch(message::contains);
+        boolean containsDepartment = departmentCatalog.mentionedIn(message);
         long digitCount = message.chars().filter(Character::isDigit).count();
         return containsDepartment && digitCount >= 5;
     }
@@ -490,17 +489,6 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
 
     private Object conversationId(Long userId) {
         return userId == null ? "default" : userId;
-    }
-
-    private static Map<String, String> createDepartmentAliases() {
-        Map<String, String> aliases = new LinkedHashMap<>();
-        aliases.put("心内科", "心血管内科");
-        aliases.put("消化科", "消化内科");
-        aliases.put("呼吸科", "呼吸内科");
-        aliases.put("耳鼻喉", "耳鼻喉科");
-        aliases.put("牙科", "口腔科");
-        aliases.put("泌尿科", "泌尿外科");
-        return aliases;
     }
 
     private static class AppointmentDraft {

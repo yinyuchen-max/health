@@ -9,7 +9,17 @@ Page({
   },
 
   onShow() {
+    this.loadDepartments()
     this.loadDoctors()
+  },
+
+  async loadDepartments() {
+    try {
+      const departments = await get('/api/doctor/departments', {}, { showLoading: false })
+      this.setData({ deptList: Array.isArray(departments) ? departments : [] })
+    } catch (err) {
+      console.error('加载科室列表失败:', err)
+    }
   },
 
   async loadDoctors() {
@@ -22,11 +32,7 @@ Page({
       const doctors = await get(url, {}, { showLoading: false })
       const doctorList = Array.isArray(doctors) ? doctors : []
 
-      // 提取科室列表
-      const deptSet = new Set(doctorList.map(d => d.department).filter(Boolean))
-      const deptList = [...deptSet]
-
-      this.setData({ doctors: doctorList, deptList, loading: false })
+      this.setData({ doctors: doctorList, loading: false })
     } catch (err) {
       console.error('加载医生列表失败:', err)
       this.setData({ loading: false })

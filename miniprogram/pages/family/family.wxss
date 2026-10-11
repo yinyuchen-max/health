@@ -1,0 +1,20 @@
+.family-page { padding: 24rpx; padding-bottom: 60rpx; }
+.title { display: block; font-size: 42rpx; font-weight: 700; margin: 14rpx 0; }
+.eyebrow { color: #7c3aed; font-size: 22rpx; letter-spacing: 3rpx; }
+.description, .hint { display: block; color: #6b7280; font-size: 26rpx; line-height: 1.7; margin: 8rpx 0; }
+.hint { font-size: 24rpx; color: #8b8499; }
+.notice { padding: 22rpx; margin: 22rpx 0; border-radius: 16rpx; background: #f5f3ff; color: #6d28d9; line-height: 1.7; font-size: 26rpx; }
+.label { display: block; margin: 20rpx 0 12rpx; color: #6b7280; font-size: 26rpx; }
+.hero .btn-primary { margin-top: 28rpx; }
+.section-title, .name { display: block; font-size: 30rpx; font-weight: 600; }
+.outside { margin: 30rpx 6rpx 20rpx; }
+.actions { display: flex; gap: 14rpx; flex-wrap: wrap; margin: 18rpx 0; }
+.actions button { margin: 0; }
+button[size="mini"] { font-size: 24rpx; border-radius: 14rpx; }
+.primary { background: #7c3aed; color: #fff; } .danger { color: #ef4444; background: #fef2f2; }
+.row { padding: 24rpx 0; border-top: 1rpx solid #f3f0ff; }
+.row:first-of-type { margin-top: 18rpx; }
+.link-button { color: #7c3aed; font-size: 26rpx; background: transparent; }
+.link-button::after { border: 0; }
+.empty { color: #9ca3af; text-align: center; padding: 36rpx 16rpx; line-height: 1.7; }
+.error { color: #ef4444; display: block; margin-bottom: 20rpx; }

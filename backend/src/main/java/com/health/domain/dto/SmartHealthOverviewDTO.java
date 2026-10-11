@@ -10,6 +10,8 @@ public class SmartHealthOverviewDTO {
     /** AVAILABLE：有可分析记录；NO_DATA：需要先补充记录。 */
     private String dataStatus = "AVAILABLE";
     private String message;
+    /** AI 或 RULES，供界面明确区分分析来源。 */
+    private String analysisSource;
     private String generatedAt;
     private Double bmi;
     private String overallStatus;

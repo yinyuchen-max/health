@@ -5,6 +5,8 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
+ARG VITE_REQUEST_TIMEOUT_MS
+ARG VITE_SMART_HEALTH_TIMEOUT_MS
 RUN npm run build
 
 FROM nginx:1.27-alpine

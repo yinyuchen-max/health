@@ -215,6 +215,7 @@
 </template>
 
 <script setup>
+import { authenticatedFetch } from '../utils/auth'
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { Close, Delete, Promotion, VideoPause } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
@@ -457,9 +458,8 @@ const streamReply = async (userText, msgIdx) => {
     const base = (import.meta.env.VITE_API_BASE_URL?.trim() || '/api').replace(/\/+$/, '')
     const url = `${base}/chat/send/stream`
     const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream' }
-    if (userStore.token) headers.Authorization = `Bearer ${userStore.token.trim()}`
 
-    const res = await fetch(url, {
+    const res = await authenticatedFetch(url, {
       method: 'POST', headers,
       body: JSON.stringify({ message: userText }),
       signal: abortController.signal

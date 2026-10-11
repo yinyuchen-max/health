@@ -117,6 +117,9 @@
 
             <!-- 医生信息 -->
             <div class="section-title">执业信息</div>
+            <el-alert v-if="departmentsError" :title="departmentsError" type="error" :closable="false">
+              <el-button text @click="reloadDepartments">重试</el-button>
+            </el-alert>
 
             <el-row :gutter="16">
               <el-col :span="12">
@@ -134,7 +137,7 @@
             <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item label="科室" prop="department">
-                  <el-select v-model="form.department" placeholder="选择科室" size="large" style="width: 100%">
+                  <el-select :loading="departmentsLoading" :disabled="departmentsLoading || !departments.length" v-model="form.department" placeholder="选择科室" size="large" style="width: 100%">
                     <el-option v-for="dept in departments" :key="dept" :label="dept" :value="dept" />
                   </el-select>
                 </el-form-item>
@@ -184,15 +187,13 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Lock, User, Message, Phone, FirstAidKit, ChatDotRound, DataLine } from '@element-plus/icons-vue'
 import request from '../utils/request'
+import { useDepartments } from '../composables/useDepartments'
 
 const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
 
-const departments = [
-  '内科', '外科', '儿科', '妇科', '皮肤科', '眼科', '耳鼻喉科', '口腔科',
-  '骨科', '神经内科', '心血管内科', '消化内科', '呼吸内科', '泌尿外科'
-]
+const { departments, departmentsLoading, departmentsError, reloadDepartments } = useDepartments()
 
 const form = reactive({
   username: '',

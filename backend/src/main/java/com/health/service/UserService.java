@@ -11,7 +11,7 @@ import com.health.domain.vo.UserVO;
 
 public interface UserService extends IService<User> {
 
-    String login(UserLoginDTO userLoginDTO);
+    User login(UserLoginDTO userLoginDTO);
 
     /**
      * 注册新用户

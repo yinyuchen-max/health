@@ -1,0 +1,22 @@
+<view class="report-page">
+  <view class="card" wx:if="{{overview.analysisSource === 'RULES'}}"><text>{{overview.message}}</text><navigator url="/pages/ai-settings/ai-settings">前往 AI 设置</navigator></view>
+  <view class="card"><text class="title">{{memberName}}的健康报告</text><text class="hint">报告来自家人已记录的数据与智能分析。</text></view>
+  <view class="card" wx:if="{{loading}}"><text>正在整理家人的健康报告，请稍候…</text></view>
+  <view class="card error" wx:elif="{{error}}">{{error}}</view>
+  <block wx:elif="{{overview}}">
+    <view class="card" wx:if="{{overview.dataStatus === 'NO_DATA'}}"><text>{{overview.message || '家人还没有健康记录'}}</text></view>
+    <block wx:else>
+      <view class="card"><text class="section-title">健康概览</text><text class="paragraph">{{overview.overallStatus}}</text><text class="paragraph" wx:if="{{overview.bmi !== null}}">BMI：{{overview.bmi}}</text><text class="hint">分析时间：{{overview.generatedAt}}</text></view>
+      <view class="card" wx:for="{{risks}}" wx:key="assessmentType" wx:for-item="risk">
+        <text class="section-title">{{risk.label}}</text><text class="risk risk-{{risk.riskLevel}}">{{risk.levelLabel}}风险 · {{risk.riskScore}}</text>
+        <text class="paragraph">{{risk.summary}}</text><text class="paragraph" wx:for="{{risk.recommendations}}" wx:key="*this">• {{item}}</text>
+      </view>
+      <view class="card" wx:if="{{overview.nutritionAdvice}}"><text class="section-title">营养建议</text><text class="paragraph">{{overview.nutritionAdvice.summary}}</text><text class="paragraph" wx:if="{{overview.nutritionAdvice.dailyCalories}}">每日热量建议：{{overview.nutritionAdvice.dailyCalories}} kcal</text><text class="paragraph" wx:for="{{overview.nutritionAdvice.recommendations}}" wx:key="*this">• {{item}}</text></view>
+      <view class="card" wx:if="{{overview.exercisePlan}}"><text class="section-title">运动计划</text><text class="paragraph">{{overview.exercisePlan.goal}} · {{overview.exercisePlan.intensity}}</text><text class="paragraph">每周目标：{{overview.exercisePlan.weeklyMinutesTarget}} 分钟</text><text class="paragraph" wx:for="{{overview.exercisePlan.weeklyPlan}}" wx:key="*this">• {{item}}</text></view>
+      <view class="card" wx:for="{{insights}}" wx:key="label" wx:for-item="insight"><text class="section-title">{{insight.label}}</text><text class="paragraph">{{insight.value.summary}}</text><text class="paragraph" wx:for="{{insight.value.recommendations}}" wx:key="*this">• {{item}}</text></view>
+      <view class="card" wx:if="{{overview.quickTips.length}}"><text class="section-title">日常建议</text><text class="paragraph" wx:for="{{overview.quickTips}}" wx:key="*this">• {{item}}</text></view>
+      <text class="hint">智能分析仅供健康管理参考。</text>
+    </block>
+  </block>
+  <button class="btn-primary" loading="{{loading}}" disabled="{{loading}}" bindtap="load">{{error ? '重新加载' : '刷新报告'}}</button>
+</view>

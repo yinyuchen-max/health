@@ -55,7 +55,6 @@ CREATE TABLE `health_record` (
 
 LOCK TABLES `health_record` WRITE;
 /*!40000 ALTER TABLE `health_record` DISABLE KEYS */;
-INSERT INTO `health_record` VALUES (1,1,120.00,80.00,72,5.50,70.00,'2024-01-01','正常血压','2026-03-18 15:39:05',0),(2,2,115.00,75.00,68,5.20,75.00,'2024-01-01','健康状态良好','2026-03-18 15:39:05',0),(3,1,70.00,42.00,54,2.40,65.00,'2026-04-08','','2026-04-14 15:29:14',0),(4,1,60.00,40.00,78,3.00,64.00,'2026-04-07','','2026-04-14 15:34:20',0),(5,1,123.00,61.00,67,4.30,60.00,'2026-04-01','五','2026-04-17 16:43:16',0),(6,1,120.00,80.00,72,5.50,70.00,'2024-01-01','正常血压','2026-04-17 16:51:53',0),(7,2,115.00,75.00,68,5.20,75.00,'2024-01-01','健康状态良好','2026-04-17 16:51:53',0),(8,1,120.00,80.00,72,5.50,65.00,'2024-01-01','正常血压','2026-04-17 17:28:12',0),(9,2,115.00,75.00,68,5.20,75.00,'2024-01-01','健康状态良好','2026-04-17 17:28:12',0),(10,1,111.00,70.00,111,30.00,20.00,'2026-04-20','11','2026-04-20 15:06:24',0),(11,3,110.00,70.00,78,3.40,65.00,'2026-04-02','wu','2026-04-21 10:43:09',0),(12,3,120.00,70.00,89,2.20,60.00,'2026-04-21','无不适','2026-04-21 11:00:13',0),(13,7,60.00,41.00,47,2.10,20.50,'2026-04-21','e','2026-04-21 14:14:37',0),(14,1,120.00,80.00,72,5.50,70.00,'2024-01-01','正常血压','2026-04-24 16:30:53',0),(15,2,115.00,75.00,68,5.20,75.00,'2024-01-01','健康状态良好','2026-04-24 16:30:53',0);
 /*!40000 ALTER TABLE `health_record` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -92,7 +91,6 @@ CREATE TABLE `history_record` (
 
 LOCK TABLES `history_record` WRITE;
 /*!40000 ALTER TABLE `history_record` DISABLE KEYS */;
-INSERT INTO `history_record` VALUES (1,1,'health',NULL,'体重记录','体重: 70','2024-01-01 00:00:00','2026-04-17 16:51:53','2026-04-17 16:51:53',0),(2,1,'sport',NULL,'跑步运动','晨跑30分钟，消耗300卡路里','2024-01-01 18:30:00','2026-04-17 16:51:53','2026-04-17 16:51:53',0),(3,1,'reminder',NULL,'血压测量提醒','已完成早间血压测量，结果 120/80 mmHg','2024-01-02 09:00:00','2026-04-17 16:51:53','2026-04-17 16:51:53',0),(4,2,'health',NULL,'血压记录','血压: 115/75 mmHg，心率: 68 次/分','2024-01-01 07:45:00','2026-04-17 16:51:53','2026-04-17 16:51:53',0),(5,2,'sport',NULL,'游泳运动','自由泳45分钟，消耗450卡路里','2024-01-01 19:00:00','2026-04-17 16:51:53','2026-04-17 16:51:53',0),(6,1,'health',NULL,'体重记录','体重: 70kg，血糖: 5.5 mmol/L','2024-01-01 08:00:00','2026-04-17 17:28:12','2026-04-17 17:28:12',0),(7,1,'sport',NULL,'跑步运动','晨跑30分钟，消耗300卡路里','2024-01-01 18:30:00','2026-04-17 17:28:12','2026-04-17 17:28:12',0),(8,1,'reminder',NULL,'血压测量提醒','已完成早间血压测量，结果 120/80 mmHg','2024-01-02 09:00:00','2026-04-17 17:28:12','2026-04-17 17:28:12',0),(9,2,'health',NULL,'血压记录','血压: 115/75 mmHg，心率: 68 次/分','2024-01-01 07:45:00','2026-04-17 17:28:12','2026-04-17 17:28:12',0),(10,2,'sport',NULL,'游泳运动','自由泳45分钟，消耗450卡路里','2024-01-01 19:00:00','2026-04-17 17:28:12','2026-04-17 17:28:12',0),(11,3,'health',12,'Health Record 2026-04-21',', HR 89 bpm, Blood Sugar 2.2 mmol/L, Weight 60.0 kg; Notes: 无不适','2026-04-21 00:00:00','2026-04-21 11:00:13','2026-04-21 11:00:13',0),(12,3,'sport',11,'Sport Record 2026-04-21','瑜伽, Duration 90 min, Intensity High, Calories 270.0 kcal; Notes: 无','2026-04-21 00:00:00','2026-04-21 11:05:51','2026-04-21 11:05:50',0),(13,7,'health',13,'Health Record 2026-04-21','BP 60.0/41.0 mmHg, HR 47 bpm, Blood Sugar 2.1 mmol/L, Weight 20.5 kg; Notes: e','2026-04-21 00:00:00','2026-04-21 14:14:37','2026-04-21 14:14:37',0),(14,7,'sport',12,'Sport Record 2026-04-21','骑车, Duration 1 min, Intensity Low, Calories 1.0 kcal','2026-04-21 00:00:00','2026-04-21 14:15:10','2026-04-21 14:15:09',0),(15,1,'health',NULL,'体重记录','','2024-01-01 00:00:00','2026-04-24 16:30:53','2026-04-24 16:30:53',0),(16,1,'sport',NULL,'跑步运动','晨跑30分钟，消耗300卡路里','2024-01-01 18:30:00','2026-04-24 16:30:53','2026-04-24 16:30:53',0),(17,1,'reminder',NULL,'血压测量提醒','已完成早间血压测量，结果 120/80 mmHg','2024-01-02 09:00:00','2026-04-24 16:30:53','2026-04-24 16:30:53',0),(18,2,'health',NULL,'血压记录','血压: 115/75 mmHg，心率: 68 次/分','2024-01-01 07:45:00','2026-04-24 16:30:53','2026-04-24 16:30:53',0),(19,2,'sport',NULL,'游泳运动','自由泳45分钟，消耗450卡路里','2024-01-01 19:00:00','2026-04-24 16:30:53','2026-04-24 16:30:53',0),(20,1,'health',10,'Health Record 2026-04-20','BP 111.0/70.0 mmHg, HR 111 bpm, Blood Sugar 30 mmol/L, Weight 20.0 kg; Notes: 11','2026-04-20 00:00:00','2026-04-29 11:20:50','2026-04-29 11:20:49',0),(21,1,'health',5,'Health Record 2026-04-01','BP 123.0/61.0 mmHg, HR 67 bpm, Blood Sugar 4.3 mmol/L, Weight 60.0 kg; Notes: 五','2026-04-01 00:00:00','2026-04-29 11:21:02','2026-04-29 11:21:01',0);
 /*!40000 ALTER TABLE `history_record` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -236,7 +234,6 @@ CREATE TABLE `sport_record` (
 
 LOCK TABLES `sport_record` WRITE;
 /*!40000 ALTER TABLE `sport_record` DISABLE KEYS */;
-INSERT INTO `sport_record` VALUES (1,1,'跑步',30,300.00,'medium','2024-01-01','晨跑30分钟','2026-03-18 15:39:05',0),(2,2,'游泳',45,450.00,'high','2024-01-01','自由泳45分钟','2026-03-18 15:39:05',0),(3,1,'游泳',1,12.00,'low','2026-04-01','','2026-04-14 15:43:15',0),(4,1,'游泳',66,792.00,'high','2026-04-14','','2026-04-14 15:44:20',0),(5,1,'游泳',32,384.00,'medium','2026-04-15','','2026-04-14 15:48:21',0),(6,1,'瑜伽',44,132.00,'medium','2026-04-15','','2026-04-14 15:52:59',0),(7,1,'跑步',30,300.00,'medium','2024-01-01','晨跑30分钟','2026-04-17 16:51:53',0),(8,2,'游泳',45,450.00,'high','2024-01-01','自由泳45分钟','2026-04-17 16:51:53',0),(9,1,'跑步',30,300.00,'medium','2024-01-01','晨跑30分钟','2026-04-17 17:28:12',0),(10,2,'游泳',45,450.00,'high','2024-01-01','自由泳45分钟','2026-04-17 17:28:12',0),(11,3,'瑜伽',90,270.00,'high','2026-04-21','无','2026-04-21 11:05:51',0),(12,7,'骑车',1,1.00,'low','2026-04-21','','2026-04-21 14:15:10',0),(13,1,'跑步',30,300.00,'medium','2024-01-01','晨跑30分钟','2026-04-24 16:30:53',0),(14,2,'游泳',45,450.00,'high','2024-01-01','自由泳45分钟','2026-04-24 16:30:53',0);
 /*!40000 ALTER TABLE `sport_record` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -276,8 +273,6 @@ CREATE TABLE `sys_user` (
 
 LOCK TABLES `sys_user` WRITE;
 /*!40000 ALTER TABLE `sys_user` DISABLE KEYS */;
--- 密码均为 BCrypt 加密：admin/123456、user1/456、yyc/123、1321/111
-INSERT INTO `sys_user` VALUES (1,'admin','$2a$10$73NOYX/2GDtyCGIB8YxQOO1xOjLEkDwb6.VBG9lhMw7iBX4rMvsF.','admin@health.com','138000000001',1,23,175.00,70.00,NULL,'admin',1,'2026-03-18 15:39:05','2026-04-15 10:27:52',0),(2,'user1','$2a$10$/SdkFml1F3JoRNHtsw2e6uChcS6zQp7bxSegp.d3xq5/ruX2k1Ed6','user1@health.com','13800000001',1,28,180.00,75.00,NULL,'user',1,'2026-03-18 15:39:05','2026-04-15 15:30:14',0),(3,'yyc','$2a$10$lrcR23TVtCjC6O5l4OQzNeG9FIEmEhotpLUyUu9t..PioTnUjrr7y','ycy66165@gmail.com','16783743726',1,43,185.00,70.00,NULL,'user',1,'2026-04-15 15:29:10','2026-04-24 14:07:10',0),(7,'1321','$2a$10$Ji2DMD95xuBiH1UbiZPjN.Z1.YyzFnVlZkvYkqOr/z.c5KX/Tty52','18663566210@163.com','1',1,4,58.00,20.00,NULL,'user',0,'2026-04-21 14:12:54','2026-04-24 17:50:49',0);
 /*!40000 ALTER TABLE `sys_user` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -299,3 +294,103 @@ UNLOCK TABLES;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-07-18  8:54:24
+
+-- V2__add_doctor_appointment.sql
+
+CREATE TABLE IF NOT EXISTS `doctor_appointment` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint DEFAULT NULL COMMENT '系统用户ID，未登录时为空',
+  `patient_name` varchar(50) NOT NULL COMMENT '姓名',
+  `age` int NOT NULL COMMENT '年龄',
+  `appointment_time` datetime NOT NULL COMMENT '预约时间',
+  `phone` varchar(20) NOT NULL COMMENT '用户电话',
+  `department` varchar(50) NOT NULL COMMENT '预约科室',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_appointment_user_id` (`user_id`),
+  KEY `idx_appointment_time` (`appointment_time`),
+  KEY `idx_appointment_phone` (`phone`),
+  CONSTRAINT `doctor_appointment_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='医生预约表';
+
+-- V3__add_doctor_features.sql
+
+-- =============================================
+-- 医生端功能扩展
+-- =============================================
+
+-- 1. 医生信息表（与 sys_user 关联，需审核）
+CREATE TABLE IF NOT EXISTS `doctor` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL COMMENT '关联 sys_user',
+  `real_name` varchar(50) NOT NULL COMMENT '真实姓名',
+  `hospital` varchar(100) NOT NULL COMMENT '所属医院',
+  `department` varchar(50) NOT NULL COMMENT '科室',
+  `title` varchar(30) DEFAULT NULL COMMENT '职称：主任医师/副主任医师/主治医师/住院医师',
+  `specialization` varchar(200) DEFAULT NULL COMMENT '擅长领域',
+  `license_number` varchar(50) NOT NULL COMMENT '执业证书编号',
+  `introduction` text COMMENT '个人简介',
+  `status` enum('pending','approved','rejected') DEFAULT 'pending' COMMENT '审核状态',
+  `reject_reason` varchar(500) DEFAULT NULL COMMENT '驳回原因',
+  `approved_by` bigint DEFAULT NULL COMMENT '审核人（admin user_id）',
+  `approved_at` datetime DEFAULT NULL COMMENT '审核时间',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted` tinyint DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_id` (`user_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_department` (`department`),
+  CONSTRAINT `doctor_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='医生信息表';
+
+-- 2. 医患对话表
+CREATE TABLE IF NOT EXISTS `doctor_message` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `doctor_id` bigint NOT NULL COMMENT '医生ID',
+  `user_id` bigint NOT NULL COMMENT '用户ID',
+  `sender_id` bigint NOT NULL COMMENT '发送者ID',
+  `sender_type` enum('user','doctor') NOT NULL COMMENT '发送者类型',
+  `content` text NOT NULL COMMENT '消息内容',
+  `is_read` tinyint(1) DEFAULT '0' COMMENT '是否已读',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `deleted` tinyint DEFAULT '0',
+  PRIMARY KEY (`id`),
+  KEY `idx_doctor_user` (`doctor_id`, `user_id`),
+  KEY `idx_sender` (`sender_id`, `sender_type`),
+  KEY `idx_created_at` (`created_at`),
+  CONSTRAINT `doctor_message_ibfk_1` FOREIGN KEY (`doctor_id`) REFERENCES `doctor` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `doctor_message_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `sys_user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='医患对话消息表';
+
+-- 3. 预约表增加医生字段
+ALTER TABLE `doctor_appointment`
+  ADD COLUMN `doctor_id` bigint DEFAULT NULL COMMENT '医生ID' AFTER `department`,
+  ADD COLUMN `status` enum('pending','confirmed','completed','cancelled') DEFAULT 'pending' COMMENT '预约状态' AFTER `doctor_id`,
+  ADD KEY `idx_doctor_id` (`doctor_id`);
+
+-- 注意：外键约束需要 doctor 表已存在才能添加
+-- ALTER TABLE `doctor_appointment`
+--   ADD CONSTRAINT `doctor_appointment_ibfk_2` FOREIGN KEY (`doctor_id`) REFERENCES `doctor` (`id`) ON DELETE SET NULL;
+
+-- V4__add_wechat_openid.sql
+-- 微信 openid 字段增量脚本
+-- 为 sys_user 表添加微信 openid 字段，用于微信小程序登录
+
+ALTER TABLE sys_user ADD COLUMN wechat_openid VARCHAR(64) DEFAULT NULL COMMENT '微信小程序 openid' AFTER phone;
+CREATE UNIQUE INDEX idx_user_wechat_openid ON sys_user(wechat_openid);
+
+-- V5__add_subscribe_message.sql
+-- 订阅消息表增量脚本
+-- 用于存储微信订阅消息授权记录
+
+CREATE TABLE IF NOT EXISTS subscribe_message (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    openid VARCHAR(128) NOT NULL,
+    template_id VARCHAR(128) NOT NULL,
+    status TINYINT DEFAULT 1 COMMENT '1-有效 0-已使用',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_template (user_id, template_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='微信订阅消息授权记录';

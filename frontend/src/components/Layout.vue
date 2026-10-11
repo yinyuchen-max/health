@@ -96,6 +96,8 @@
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="profile">个人信息</el-dropdown-item>
+                  <el-dropdown-item command="family">家庭成员</el-dropdown-item>
+                  <el-dropdown-item command="ai-settings">AI 设置</el-dropdown-item>
                   <el-dropdown-item command="password">修改密码</el-dropdown-item>
                   <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
                 </el-dropdown-menu>
@@ -116,6 +118,7 @@
 </template>
 
 <script setup>
+import { ElMessage } from 'element-plus'
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
@@ -143,7 +146,7 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const activeMenu = computed(() => route.path)
-const isAdmin = computed(() => userStore.userInfo?.username === 'admin')
+const isAdmin = computed(() => userStore.userInfo?.role === 'admin')
 
 const isMobile = ref(false)
 const drawerVisible = ref(false)
@@ -172,11 +175,13 @@ const menuItems = computed(() => [
   { index: '/app/reminder', icon: Bell, label: '提醒设置', color: '#F59E0B', hidden: false },
   { index: '/app/history', icon: Clock, label: '历史记录', color: '#8B5CF6', hidden: false },
   { index: '/app/analytics', icon: DataAnalysis, label: '数据分析', color: '#06B6D4', hidden: false },
+  { index: '/app/ai-settings', icon: Setting, label: 'AI 设置', color: '#6366F1', hidden: false },
   { index: '/app/smart-health', icon: Opportunity, label: '智能健康', color: '#EC4899', hidden: false },
   { index: '/app/doctors', icon: FirstAidKit, label: '医生列表', color: '#14B8A6', hidden: false },
   { index: '/app/doctor-chat', icon: ChatLineRound, label: '医生咨询', color: '#F97316', hidden: false },
   { index: '/doctor/dashboard', icon: UserFilled, label: '医生工作台', color: '#3B82F6', hidden: !isDoctor.value },
   { index: '/app/profile', icon: User, label: '个人信息', color: '#64748B', hidden: false },
+  { index: '/app/family', icon: UserFilled, label: '家庭成员', color: '#0D9488', hidden: false },
   { index: '/app/user-management', icon: Setting, label: '用户管理', color: '#64748B', hidden: !isAdmin.value },
   { index: '/app/doctor-management', icon: Setting, label: '医生审核', color: '#64748B', hidden: !isAdmin.value }
 ])
@@ -191,12 +196,16 @@ const checkDoctorStatus = async () => {
   }
 }
 
-const handleCommand = (command) => {
+const handleCommand = async (command) => {
   if (command === 'logout') {
-    userStore.logout()
+    try { await userStore.logout() } catch (error) { ElMessage.error(error.message || '退出失败，请稍后重试'); return }
     router.push('/')
   } else if (command === 'profile') {
     router.push('/app/profile')
+  } else if (command === 'family') {
+    router.push('/app/family')
+  } else if (command === 'ai-settings') {
+    router.push('/app/ai-settings')
   } else if (command === 'password') {
     router.push('/app/change-password')
   }

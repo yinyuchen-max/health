@@ -5,8 +5,14 @@ import com.health.domain.dto.AppointmentExtractionResult;
 import com.health.domain.entity.DoctorAppointment;
 import com.health.service.impl.AppointmentConversationServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.core.io.ClassPathResource;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,7 +41,8 @@ class AppointmentConversationServiceTest {
                 doctorAppointmentService,
                 informationExtractor,
                 doctorService,
-                userService
+                userService,
+                new DepartmentCatalog(new ClassPathResource("catalogs/departments.yml"))
         );
     }
 
@@ -54,6 +61,7 @@ class AppointmentConversationServiceTest {
         String reply = conversationService.handleMessage("我要预约医生", 1L);
 
         assertTrue(reply.contains("姓名、年龄、预约时间、用户电话、预约科室"));
+        assertFutureExample(reply);
     }
 
     @Test
@@ -122,5 +130,47 @@ class AppointmentConversationServiceTest {
         extraction.setPhone("17865387668");
         extraction.setDepartment("泌尿科");
         return extraction;
+    }
+
+    @Test
+    void invalidDateShowsFutureExample() {
+        AppointmentExtractionResult extraction = completeExtraction();
+        extraction.setAppointmentTime("无法解析的日期");
+        when(informationExtractor.extract(anyString(), any(AppointmentExtractionContext.class)))
+                .thenReturn(extraction);
+        String reply = conversationService.handleMessage("我要预约", 1L);
+        assertTrue(reply.contains("无法识别预约时间"));
+        assertFutureExample(reply);
+    }
+
+    @Test
+    void pastDateShowsFutureExampleWithoutSaving() {
+        AppointmentExtractionResult extraction = completeExtraction();
+        extraction.setAppointmentTime("2000-01-01 09:30");
+        when(informationExtractor.extract(anyString(), any(AppointmentExtractionContext.class)))
+                .thenReturn(extraction);
+        String reply = conversationService.handleMessage("我要预约", 1L);
+        assertTrue(reply.contains("预约时间必须晚于当前时间"));
+        assertFutureExample(reply);
+        verify(doctorAppointmentService, never()).createAppointment(any());
+    }
+
+    @Test
+    void extractionFailureShowsFutureExample() {
+        when(informationExtractor.extract(anyString(), any(AppointmentExtractionContext.class)))
+                .thenThrow(new IllegalStateException("test extraction failure"));
+        assertFutureExample(conversationService.handleMessage("我要预约", 1L));
+    }
+
+    private void assertFutureExample(String reply) {
+        var matcher = Pattern.compile("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}").matcher(reply);
+        assertTrue(matcher.find(), "回复应提供可填写的日期示例");
+        do {
+            LocalDateTime example = LocalDateTime.parse(matcher.group(),
+                    DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm"));
+            assertTrue(example.isAfter(LocalDateTime.now(ZoneId.of("Asia/Shanghai"))));
+            assertEquals(9, example.getHour());
+            assertEquals(30, example.getMinute());
+        } while (matcher.find());
     }
 }

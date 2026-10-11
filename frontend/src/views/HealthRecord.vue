@@ -221,6 +221,7 @@ const tabs = [
 ]
 
 const emptyForm = () => ({
+  version: null,
   recordDate: '',
   bloodPressureSystolic: null,
   bloodPressureDiastolic: null,
@@ -340,6 +341,7 @@ const openEditDialog = (row) => {
   resetForm()
   editingRecordId.value = row.id
   Object.assign(formState, {
+    version: row.version,
     recordDate: row.recordDate,
     bloodPressureSystolic: row.bloodPressureSystolic,
     bloodPressureDiastolic: row.bloodPressureDiastolic,
@@ -371,7 +373,9 @@ const submitForm = async () => {
     notifyHistoryChanged()
   } catch (error) {
     console.error('保存健康记录失败', error)
-    ElMessage.error('保存健康记录失败')
+    ElMessage.error(error?.message || '保存健康记录失败')
+    // 保留表单及旧版本；重新打开最新记录后才能再次保存。
+    if (error?.status === 409) await loadRecords()
   } finally {
     saving.value = false
   }

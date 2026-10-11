@@ -1,9 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-const hasValidToken = () => {
-  const token = localStorage.getItem('token')
-  return typeof token === 'string' && token.trim().split('.').length === 3
-}
+import { useUserStore } from '../store/user'
+import { ElMessage } from 'element-plus'
 
 const routes = [
   {
@@ -56,6 +54,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'family',
+        name: 'Family',
+        component: () => import('../views/FamilyMembers.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'health',
         name: 'Health',
         component: () => import('../views/HealthRecord.vue'),
@@ -103,6 +107,7 @@ const routes = [
         component: () => import('../views/SmartHealth.vue'),
         meta: { requiresAuth: true }
       },
+      { path: 'ai-settings', name: 'AiSettings', component: () => import('../views/AiSettings.vue'), meta: { requiresAuth: true } },
       {
         path: 'ai-chat',
         name: 'AiChat',
@@ -142,31 +147,36 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
-  const token = hasValidToken()
-
-  if (to.meta.requiresAuth && !token) {
-    next('/')
-  } else if (to.meta.requiresAdmin) {
-    // 检查是否为管理员
-    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
-    if (userInfo.username === 'admin') {
-      next()
-    } else {
-      alert('权限不足，仅管理员可访问')
-      next('/app/dashboard')
+router.beforeEach(async to => {
+  const user = useUserStore()
+  if (to.meta.requiresAuth || to.path === '/' || to.path === '/register') {
+    try { await user.ensureSession() }
+    catch {
+      if (to.meta.requiresAuth && !user.token) { ElMessage.error("认证服务暂时不可用，请稍后重试"); return false }
     }
-  } else if (to.path === '/') {
-    if (token) {
-      next('/app/dashboard')
-    } else {
-      next()
-    }
-  } else if (to.path === '/register' && token) {
-    next('/app/dashboard')
-  } else {
-    next()
   }
+  if (to.meta.requiresAuth && !user.token) return '/'
+  if (user.token && !user.userInfo.id) {
+    try {
+      const { default: request } = await import('../utils/request')
+      const response = await request.get('/user/info')
+      if (!response.data?.id) throw new Error('用户信息读取失败')
+      user.setUserInfo(response.data)
+    } catch {
+      if (!user.token) return '/'
+      ElMessage.error('用户信息暂时不可用，请稍后重试')
+      return false
+    }
+  }
+  if (to.meta.requiresAdmin) {
+    try {
+      const { default: request } = await import('../utils/request')
+      const response = await request.get('/user/info')
+      user.setUserInfo(response.data)
+    } catch { return '/app/dashboard' }
+    if (user.userInfo.role !== 'admin') return '/app/dashboard'
+  }
+  if ((to.path === '/' || to.path === '/register') && user.token) return '/app/dashboard'
 })
 
 export default router
