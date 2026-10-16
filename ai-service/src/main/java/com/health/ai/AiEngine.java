@@ -17,8 +17,9 @@ public class AiEngine {
         List<ChatMessage> messages=new ArrayList<>();
         switch(r.task()) {
             case "chat" -> {
+                vars.putIfAbsent("longTermMemories", "暂无长期记忆");
                 messages.add(SystemMessage.from(prompts.render("chat-system",Map.of())+"\n\n"
-                        +prompts.render("chat-user-context",vars)));
+                        +prompts.render("chat-user-context",vars)+"\n\n"+prompts.render("memory-context",vars)));
                 if (r.history()!=null) for(var m:r.history()) {
                     if ("user".equals(m.role())) messages.add(UserMessage.from(m.content()));
                     else if ("assistant".equals(m.role())) messages.add(AiMessage.from(m.content()));
@@ -33,6 +34,10 @@ public class AiEngine {
             }
             case "appointment" -> {
                 messages.add(SystemMessage.from(prompts.render("appointment-extract-system",vars)));
+                messages.add(UserMessage.from(r.message()));
+            }
+            case "memory-extract" -> {
+                messages.add(SystemMessage.from(prompts.render("memory-extract-system",vars)));
                 messages.add(UserMessage.from(r.message()));
             }
             default -> throw new IllegalArgumentException("未知 AI 任务");

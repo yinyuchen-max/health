@@ -4,3 +4,6 @@ backend/src/main/resources/application.yml
 
 
 ai-service/target/
+
+# Local payment signing keys; mount read-only into the backend.
+payment-keys/

@@ -114,6 +114,7 @@ public class SmartHealthServiceImpl implements SmartHealthService {
 
     @Override
     public SmartHealthOverviewDTO generateOverview(Long userId) {
+        ai.requireAccess(ai.payer(userId));
         // 同一用户的并发刷新串行复查缓存，避免同时重复生成。
         synchronized (generationLocks[Math.floorMod(userId.hashCode(), generationLocks.length)]) {
             return generateOverviewIfChanged(userId);
@@ -156,7 +157,7 @@ public class SmartHealthServiceImpl implements SmartHealthService {
         Double latestBloodSugar = latestHealthRecord != null && latestHealthRecord.getBloodSugar() != null
                 ? latestHealthRecord.getBloodSugar().doubleValue()
                 : null;
-        // Capture the caller and decrypt their key before asynchronous work loses the SecurityContext.
+        // Capture the caller before asynchronous work loses the SecurityContext.
         SmartHealthOverviewDTO aiResult = tryGenerateWithAI(payerId, user, healthRecords, sportRecords,
                 bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord, historyRecords);
         if (aiResult != null) {
@@ -170,7 +171,7 @@ public class SmartHealthServiceImpl implements SmartHealthService {
         SmartHealthOverviewDTO overview = new SmartHealthOverviewDTO();
         overview.setUserId(userId);
         overview.setAnalysisSource("RULES");
-        overview.setMessage("当前展示规则分析。如需 AI 分析，请配置自己的 API Key，并检查密钥额度及 AI 服务状态。");
+        overview.setMessage("AI 服务暂时不可用，当前展示规则分析。请稍后重试，或联系管理员检查平台 AI 服务。");
         overview.setGeneratedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
         overview.setBmi(bmi != null ? round(bmi) : null);
         overview.setRiskAssessments(buildRiskAssessments(bmi, latestHealthRecord, latestBloodSugar, avgHeartRate, weeklyExerciseMinutes));

@@ -18,7 +18,7 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 
 /** 完整向量和内容哈希持久化到 Redis；JVM 内存仅用于加速检索。 */
-public class HealthKnowledgeRedisRepository {
+public class HealthKnowledgeRedisRepository implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(HealthKnowledgeRedisRepository.class);
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final DefaultRedisScript<Long> RELEASE_LOCK = new DefaultRedisScript<>(
@@ -27,6 +27,13 @@ public class HealthKnowledgeRedisRepository {
     private static final DefaultRedisScript<Long> SAVE_INDEX = new DefaultRedisScript<>(
             "if redis.call('get', KEYS[1]) == ARGV[1] then redis.call('set', KEYS[2], ARGV[2]); return 1 else return 0 end",
             Long.class);
+    private static final DefaultRedisScript<Long> RENEW_LOCK = new DefaultRedisScript<>(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end", Long.class);
+    private static final DefaultRedisScript<Long> SAVE_QUERY = new DefaultRedisScript<>(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then redis.call('set', KEYS[2], ARGV[2], 'EX', 86400); return 1 else return 0 end", Long.class);
+    private final java.util.concurrent.ScheduledExecutorService renewals = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread thread=new Thread(r,"knowledge-lock-renewal"); thread.setDaemon(true); return thread;
+    });
 
     private final RagRedisProperties properties;
     private final StringRedisTemplate redis;
@@ -34,8 +41,8 @@ public class HealthKnowledgeRedisRepository {
     private final Object[] queryLocks = IntStream.range(0, 64).mapToObj(i -> new Object()).toArray();
     private volatile ActiveIndex activeIndex;
 
-    private String embeddingModelName = "text-embedding-v4";
-    private String embeddingBaseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+    private String embeddingModelName = ModelFactory.EMBEDDING_MODEL;
+    private String embeddingBaseUrl = ModelFactory.EMBEDDING_BASE_URL;
 
     public HealthKnowledgeRedisRepository(RagRedisProperties properties, StringRedisTemplate redis,
                                           EmbeddingModel embeddingModel) {
@@ -91,6 +98,7 @@ public class HealthKnowledgeRedisRepository {
             log.info("向量索引正在由其他实例构建，本次检索使用关键词回退");
             return;
         }
+        var renewal=renew(lockKey,token);
         try {
             // 获取锁后复查，避免与已完成的构建重复。
             if (restoreIndex(hash)) {
@@ -115,6 +123,7 @@ public class HealthKnowledgeRedisRepository {
         } catch (Exception e) {
             log.warn("构建向量索引失败，本次使用关键词回退");
         } finally {
+            renewal.cancel(false);
             try {
                 redis.execute(RELEASE_LOCK, List.of(lockKey), token);
             } catch (Exception e) {
@@ -147,31 +156,62 @@ public class HealthKnowledgeRedisRepository {
         }
     }
 
-    /** 每位用户仅保留最新查询向量；查询及模型配置相同时永久复用。 */
+    /** 查询费用由平台承担；每用户仅缓存最新查询一天，不混用私有查询内容。 */
     public Embedding embedQuery(String query, Long userId) {
         String hash = ContentHash.sha256(modelNamespace() + "\n" + query);
-        String key = properties.key("query:v1:" + (userId == null ? hash : userId));
+        String key = properties.key("query:v2:" + (userId == null ? hash : userId));
         synchronized (queryLocks[Math.floorMod(key.hashCode(), queryLocks.length)]) {
-            try {
-                String json = redis.opsForValue().get(key);
-                if (json != null) {
-                    QuerySnapshot snapshot = JSON.readValue(json, QuerySnapshot.class);
-                    if (hash.equals(snapshot.hash()) && snapshot.vector() != null && snapshot.vector().length > 0) {
-                        return Embedding.from(snapshot.vector());
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("读取查询向量缓存失败");
+            Embedding cached=readQuery(key,hash);
+            if(cached!=null) return cached;
+            String lockKey=key+":lock", token=UUID.randomUUID().toString();
+            if(!Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(lockKey,token,properties.getLockTtl()))) {
+                long deadline=System.nanoTime()+properties.getLockWait().toNanos();
+                do {
+                    cached=readQuery(key,hash);
+                    if(cached!=null) return cached;
+                    try { Thread.sleep(50); }
+                    catch(InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException("查询已取消"); }
+                } while(System.nanoTime()<deadline);
+                // Never call the paid model when another instance owns this user's query lock.
+                throw new IllegalStateException("查询向量正在生成");
             }
-            Embedding embedding = embeddingModel.embed(query).content();
+            var renewal=renew(lockKey,token);
             try {
-                redis.opsForValue().set(key, JSON.writeValueAsString(new QuerySnapshot(hash, embedding.vector())));
-            } catch (Exception e) {
-                log.warn("保存查询向量缓存失败");
+                cached=readQuery(key,hash);
+                if(cached!=null) return cached;
+                Embedding embedding=embeddingModel.embed(query).content();
+                Long saved=redis.execute(SAVE_QUERY,List.of(lockKey,key),token,
+                        JSON.writeValueAsString(new QuerySnapshot(hash,embedding.vector())));
+                if(!Long.valueOf(1).equals(saved)) throw new IllegalStateException("查询锁已失效");
+                return embedding;
+            } catch(RuntimeException e) { throw e; }
+            catch(Exception e) { throw new IllegalStateException("查询向量生成失败"); }
+            finally {
+                renewal.cancel(false);
+                try { redis.execute(RELEASE_LOCK,List.of(lockKey),token); }
+                catch(Exception ignored) { log.warn("释放查询向量锁失败"); }
             }
-            return embedding;
         }
     }
+
+    private Embedding readQuery(String key,String hash) {
+        try {
+            String value=redis.opsForValue().get(key);
+            if(value==null) return null;
+            QuerySnapshot snapshot=JSON.readValue(value,QuerySnapshot.class);
+            return hash.equals(snapshot.hash()) && snapshot.vector()!=null && snapshot.vector().length>0
+                    ? Embedding.from(snapshot.vector()) : null;
+        } catch(Exception e) { return null; }
+    }
+
+    private java.util.concurrent.ScheduledFuture<?> renew(String key,String token) {
+        long interval=Math.max(1,properties.getLockTtl().toMillis()/3);
+        return renewals.scheduleAtFixedRate(() -> {
+            try { redis.execute(RENEW_LOCK,List.of(key),token,Long.toString(properties.getLockTtl().toMillis())); }
+            catch(Exception ignored) { log.warn("续期知识库锁失败；写入时仍校验锁所有权"); }
+        },interval,interval,java.util.concurrent.TimeUnit.MILLISECONDS);
+    }
+    @Override public void close() { renewals.shutdownNow(); }
 
     private String modelNamespace() {
         return embeddingBaseUrl + "\n" + embeddingModelName;

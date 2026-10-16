@@ -26,7 +26,9 @@ public class PromptService {
             "health-report-system", Set.of(),
             "health-report-user", Set.of("userProfile", "latestMetrics", "healthRecords",
                     "sportRecords", "retrievedKnowledge", "historyRecords"),
-            "appointment-extract-system", Set.of("currentDate", "context", "departments"));
+            "appointment-extract-system", Set.of("currentDate", "context", "departments"),
+            "memory-context", Set.of("longTermMemories"),
+            "memory-extract-system", Set.of("existingMemories"));
 
     private final Map<String, String> templates;
 

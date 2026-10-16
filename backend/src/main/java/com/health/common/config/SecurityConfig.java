@@ -85,6 +85,7 @@ public class SecurityConfig implements WebMvcConfigurer {
                 .requestMatchers(new DispatcherTypeRequestMatcher(DispatcherType.ASYNC)).permitAll()
                 // 公开接口：登录、注册、微信登录、医生列表、医生注册
                 .requestMatchers("/api/user/csrf", "/api/user/refresh", "/api/user/native-refresh", "/api/user/web-logout", "/api/user/native-logout", "/api/user/native-login", "/api/user/login", "/api/user/register", "/api/user/wechat-login", "/api/doctor/list", "/api/doctor/departments", "/api/doctor/full-register").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/ai/payments/notify/wechat", "/api/ai/payments/notify/alipay").permitAll()
                 // 管理员接口：需要 ADMIN 角色（URL 层第一道防线，方法内 requireAdmin 查库二次校验）
                 .requestMatchers("/api/user/admin/**", "/api/doctor/admin/**").hasRole("ADMIN")
                 // 其他所有 /api/** 接口需要认证

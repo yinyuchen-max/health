@@ -1,39 +1,18 @@
-const { get, put, del } = require('../../utils/request')
+const { get } = require('../../utils/request')
+const { billingWebUrl } = require('../../config/environment')
 Page({
-  data: { loading: true, busy: false, configured: false, embeddingConfigured: false, providerIndex: 0,
-    providers: ['DeepSeek', '阿里云百炼（北京）'], model: 'deepseek-flash', apiKey: '', embeddingApiKey: '', clearEmbeddingKey: false },
+  data: { loading: true, status: null, plans: [], message: '', error: '' },
   onShow() { if (getApp().checkLogin()) this.load() },
-  onHide() { this.clearSecrets() },
-  onUnload() { this.clearSecrets() },
-  clearSecrets() { this.setData({ apiKey: '', embeddingApiKey: '', clearEmbeddingKey: false }) },
   async load() {
-    this.setData({ loading: true })
+    this.setData({ loading: true, error: '' })
     try {
-      const s = await get('/api/ai/settings')
-      this.setData({ configured: s.configured, embeddingConfigured: s.embeddingConfigured, providerIndex: s.provider === 'dashscope' ? 1 : 0, model: s.model })
-    } catch {} finally { this.setData({ loading: false }) }
+      const [status, catalog] = await Promise.all([get('/api/ai/access'), get('/api/ai/payments/catalog')])
+      this.setData({ status, plans: catalog.plans.map(plan => ({ ...plan, price: (plan.amountCents / 100).toFixed(2) })),
+        message: catalog.message })
+    } catch (e) {
+      this.setData({ status: null, plans: [], error: e.message || '服务状态暂不可用' })
+    } finally { this.setData({ loading: false }) }
   },
-  providerChange(e) {
-    const providerIndex = Number(e.detail.value)
-    this.setData({ providerIndex, model: providerIndex ? 'qwen-plus' : 'deepseek-flash', apiKey: '' })
-  },
-  input(e) { const field = e.currentTarget.dataset.field; if (['model', 'apiKey', 'embeddingApiKey'].includes(field)) this.setData({ [field]: e.detail.value }) },
-  clearEmbedding(e) { this.setData({ clearEmbeddingKey: e.detail.value }) },
-  async save() {
-    if (this.data.busy) return
-    this.setData({ busy: true })
-    try {
-      await put('/api/ai/settings', { provider: this.data.providerIndex ? 'dashscope' : 'deepseek', model: this.data.model,
-        apiKey: this.data.apiKey, embeddingApiKey: this.data.embeddingApiKey, clearEmbeddingKey: this.data.clearEmbeddingKey })
-      this.clearSecrets(); await this.load(); wx.showToast({ title: '已保存', icon: 'success' })
-    } catch {} finally { this.setData({ busy: false }) }
-  },
-  remove() {
-    wx.showModal({ title: '删除全部 AI 密钥', content: '删除后健康报告改用规则分析。', success: async (r) => {
-      if (!r.confirm) return
-      this.setData({ busy: true })
-      try { await del('/api/ai/settings'); this.clearSecrets(); await this.load(); wx.showToast({ title: '已删除' }) }
-      catch {} finally { this.setData({ busy: false }) }
-    } })
-  }
+  openBilling() { wx.setClipboardData({ data: billingWebUrl, success: () => wx.showModal({ title: '网页端支付', content: '网址已复制。请在浏览器打开，登录同一账号后使用微信或支付宝付款。', showCancel: false }) }) },
+  chat() { wx.navigateTo({ url: '/pages/ai-chat/ai-chat' }) }
 })

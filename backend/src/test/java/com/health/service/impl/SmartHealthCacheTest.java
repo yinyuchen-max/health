@@ -109,7 +109,10 @@ class SmartHealthCacheTest {
         assertNull(result.getStressInsight());
         assertTrue(result.getRiskAssessments().isEmpty());
         assertTrue(result.getQuickTips().isEmpty());
-        verifyNoInteractions(model, historyMapper, cache.redis);
+        verify(model).payer(1L);
+        verify(model).requireAccess(1L);
+        verifyNoMoreInteractions(model);
+        verifyNoInteractions(historyMapper, cache.redis);
     }
 
     @Test

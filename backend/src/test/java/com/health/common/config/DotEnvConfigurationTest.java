@@ -46,7 +46,7 @@ class DotEnvConfigurationTest {
                 MYSQL_ROOT_PASSWORD=test-db-password
                 JWT_SECRET=test-jwt-secret
                 AI_SERVICE_SECRET=test-service-secret
-                AI_KEY_ENCRYPTION_KEY=test-encryption-key
+                AI_PLATFORM_API_KEY=test-platform-key
                 REDIS_PASSWORD=test-redis-password
                 RABBITMQ_PASS=test-rabbit-password
                 MAIL_PASSWORD=test-mail-password
@@ -62,7 +62,7 @@ class DotEnvConfigurationTest {
                 "spring.datasource.password", "test-db-password",
                 "jwt.secret", "test-jwt-secret",
                 "ai.service-secret", "test-service-secret",
-                "ai.key-encryption-key", "test-encryption-key",
+                "ai.platform.api-key", "test-platform-key",
                 "spring.data.redis.password", "test-redis-password",
                 "spring.rabbitmq.password", "test-rabbit-password",
                 "spring.mail.password", "test-mail-password",

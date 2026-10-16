@@ -105,6 +105,11 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
         }
     }
 
+    /** Forgetting must fail visibly if Redis cannot be cleared; callers roll back database changes. */
+    public void clearStrict(Long userId) {
+        redisTemplate.delete(CHAT_MEMORY_PREFIX + userId);
+    }
+
     /**
      * 聊天消息数据传输对象
      */

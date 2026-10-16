@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 @Component
 public class ModelFactory {
+    public static final String EMBEDDING_MODEL="text-embedding-v4";
+    public static final String EMBEDDING_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1";
     private final Duration timeout;
     public ModelFactory(@Value("${ai.timeout-seconds:60}") int seconds) { timeout=Duration.ofSeconds(seconds); }
     // The user selects a provider, never an arbitrary URL. Keys cannot be redirected to an attacker host.
@@ -20,7 +22,7 @@ public class ModelFactory {
     }
     public dev.langchain4j.model.embedding.EmbeddingModel embedding(String key) {
         return dev.langchain4j.model.openai.OpenAiEmbeddingModel.builder().apiKey(key)
-                .modelName("text-embedding-v4").baseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
+                .modelName(EMBEDDING_MODEL).baseUrl(EMBEDDING_BASE_URL)
                 .timeout(timeout).maxRetries(0).logRequests(false).logResponses(false).build();
     }
     public ChatModel chat(AiRequest r) {

@@ -58,7 +58,7 @@
     </el-card>
 
     <el-alert v-if="!loading && overview?.analysisSource === 'RULES'" type="info" :closable="false" :title="overview.message" style="margin-bottom: 16px" />
-    <el-button text @click="$router.push('/app/ai-settings')">AI 设置 · 配置自己的 API Key</el-button>
+    <el-button text @click="$router.push('/app/ai-settings')">AI 服务 · 开通与续费</el-button>
     <HealthDataNotice v-if="!loading && noData" :message="overview?.message" />
 
     <template v-if="!loading && overview && !noData">
@@ -454,6 +454,7 @@ const refreshData = async () => {
       ElMessage.warning('未能加载智能健康数据，请检查后端服务是否正常运行')
     }
   } catch (error) {
+    overview.value = null
     console.error('加载智能健康数据失败:', error)
     ElMessage.error('加载智能健康数据失败：' + (error.message || '未知错误'))
   } finally {

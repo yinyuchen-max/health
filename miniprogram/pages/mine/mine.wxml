@@ -63,7 +63,7 @@
       <text class="menu-text">个人资料</text>
       <text class="menu-arrow">></text>
     </view>
-    <view class="menu-item" bindtap="goAiSettings"><text class="menu-emoji">🔑</text><text class="menu-text">AI 设置</text><text class="menu-arrow">></text></view>
+    <view class="menu-item" bindtap="goAiSettings"><text class="menu-emoji">🔑</text><text class="menu-text">AI 服务</text><text class="menu-arrow">></text></view>
     <view class="menu-item" bindtap="goReminder">
       <text class="menu-emoji">⏰</text>
       <text class="menu-text">提醒配置</text>

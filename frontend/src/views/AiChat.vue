@@ -9,12 +9,12 @@
         <div class="header-text">
           <div class="header-title-row">
             <h2>AI 健康顾问</h2>
-            <span class="model-badge">个人模型 · 流式回复</span>
+            <span class="model-badge">平台模型 · 流式回复</span>
           </div>
           <p>健康、饮食、运动、睡眠…… 有问题尽管问（也可以说「预约」来预约医生）</p>
         </div>
       </div>
-      <el-button text @click="$router.push('/app/ai-settings')">配置 API Key</el-button>
+      <el-button text @click="$router.push('/app/ai-settings')">AI 服务与记忆</el-button>
       <el-button
         v-if="messages.length > 0"
         text
@@ -25,6 +25,9 @@
       </el-button>
     </div>
 
+    <el-alert v-if="accessMessage" :title="accessMessage" type="warning" :closable="false">
+      <el-button text @click="$router.push('/app/ai-settings')">查看 AI 服务与开通状态</el-button>
+    </el-alert>
     <!-- 消息滚动区 -->
     <div class="chat-scroll" ref="scrollRef">
       <div class="chat-column">
@@ -134,7 +137,7 @@
           :autosize="{ minRows: 1, maxRows: 6 }"
           placeholder="输入你的健康问题…"
           resize="none"
-          :disabled="loading"
+          :disabled="loading || !aiAllowed"
           class="chat-textarea"
           @keydown.enter="onEnterKey"
         />
@@ -154,7 +157,7 @@
               v-else
               type="primary"
               round
-              :disabled="!inputText.trim()"
+              :disabled="!inputText.trim() || !aiAllowed"
               @click="handleSend()"
             >
               <el-icon><Promotion /></el-icon>发送
@@ -190,6 +193,18 @@ const userStore = useUserStore()
 const messages = ref([])
 const inputText = ref('')
 const loading = ref(false)
+const aiAllowed = ref(false)
+const accessMessage = ref('正在检查 AI 服务资格…')
+const loadAccess = async () => {
+  aiAllowed.value = false
+  try {
+    const response = await request.get('/ai/access')
+    if (response.code !== 200) throw new Error(response.message || '读取服务状态失败')
+    aiAllowed.value = response.data.allowed && response.data.configured
+    accessMessage.value = !response.data.allowed ? '请先开通 AI 服务；管理员可免费使用。'
+      : !response.data.configured ? '平台 AI 服务暂未配置，请联系管理员。' : ''
+  } catch (e) { accessMessage.value = e.message || '暂时无法读取 AI 服务资格，请刷新页面重试。' }
+}
 const scrollRef = ref(null)
 
 let abortController = null
@@ -304,6 +319,7 @@ const copyMessage = async (msg) => {
 const handleSend = async (text) => {
   const message = (text ?? inputText.value).trim()
   if (!message || loading.value) return
+  if (!aiAllowed.value) { ElMessage.warning(accessMessage.value); return }
 
   inputText.value = ''
   messages.value.push({ role: 'user', content: message, time: formatTime() })
@@ -339,6 +355,7 @@ const onEnterKey = (e) => {
  * 注意：必须通过 messages.value[msgIdx]（响应式代理）更新内容，直接改原始对象不会触发视图更新
  */
 const streamReply = async (userText, msgIdx) => {
+  if (!aiAllowed.value) { ElMessage.warning(accessMessage.value); return }
   abortedByUser = false
   abortController = new AbortController()
   loading.value = true
@@ -360,7 +377,14 @@ const streamReply = async (userText, msgIdx) => {
       signal: abortController.signal
     })
 
-    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok || !res.body) {
+      if (res.status === 402) {
+        aiAllowed.value = false
+        accessMessage.value = 'AI 服务未开通或已到期，请前往 AI 服务页面开通。'
+      }
+      const failure = await res.json().catch(() => ({}))
+      throw new Error(failure.message || `HTTP ${res.status}`)
+    }
 
     const reader = res.body.getReader()
     const decoder = new TextDecoder('utf-8')
@@ -480,6 +504,7 @@ const regenerate = async (idx) => {
 /* ---------------- 生命周期 ---------------- */
 onMounted(() => {
   loadMessages()
+  loadAccess()
 })
 
 onBeforeUnmount(() => {
@@ -491,6 +516,7 @@ onBeforeUnmount(() => {
 
 watch(() => userStore.userInfo?.id, () => {
   loadMessages()
+  loadAccess()
 })
 </script>
 

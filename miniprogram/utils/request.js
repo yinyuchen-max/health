@@ -120,7 +120,7 @@ function streamRequest(options = {}) {
             if (renewed) { buffer = ''; send(renewed, true); return }
           } catch (error) { onError?.(error); return }
         }
-        if (res.statusCode >= 400) { onError?.({ message: res.statusCode === 401 ? '请重新登录' : '请求失败', status: res.statusCode }); return }
+        if (res.statusCode >= 400) { onError?.({ message: res.statusCode === 401 ? '请重新登录' : res.statusCode === 402 ? '请前往 AI 服务页面开通或续费' : '请求失败', status: res.statusCode }); return }
         onDone?.()
       },
       fail(error) { if (!cancelled) onError?.(error) }

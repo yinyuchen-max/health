@@ -24,6 +24,12 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(com.health.ai.AiPaymentRequiredException.class)
+    public ResponseEntity<Result<?>> handleAiPaymentRequired(com.health.ai.AiPaymentRequiredException e) {
+        return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body(Result.failed(e.getMessage()).setCode(402));
+    }
+
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<Result<?>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e,
                                                               HttpServletRequest request) {

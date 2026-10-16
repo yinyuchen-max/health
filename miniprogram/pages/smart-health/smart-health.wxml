@@ -1,5 +1,5 @@
 <view class="page">
-  <view class="card" wx:if="{{overview.analysisSource === 'RULES'}}"><text>{{overview.message}}</text><navigator url="/pages/ai-settings/ai-settings">前往 AI 设置</navigator></view>
+  <view class="card" wx:if="{{overview.analysisSource === 'RULES'}}"><text>{{overview.message}}</text><navigator url="/pages/ai-settings/ai-settings">前往 AI 服务</navigator></view>
   <!-- 总体状态 -->
   <view class="status-card card" wx:if="{{overview.overallStatus}}">
     <view class="status-header">

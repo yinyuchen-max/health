@@ -22,6 +22,7 @@ import java.util.concurrent.*;
 @Service
 public class AiClient implements AutoCloseable {
     private final AiConfigService configs;
+    private final AiAccessService access;
     private final SecurityUtil security;
     private final ObjectMapper json;
     private final URI endpoint;
@@ -34,27 +35,33 @@ public class AiClient implements AutoCloseable {
     private final ScheduledExecutorService deadlines = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "health-ai-deadline"); t.setDaemon(true); return t;
     });
-    public AiClient(AiConfigService configs, SecurityUtil security, ObjectMapper json,
+    public AiClient(AiConfigService configs, AiAccessService access, SecurityUtil security, ObjectMapper json,
                     @Value("${ai.service-url:http://127.0.0.1:8081}") String url,
                     @Value("${ai.service-secret}") String secret) {
-        this.configs=configs; this.security=security; this.json=json;
+        this.configs=configs; this.access=access; this.security=security; this.json=json;
         this.endpoint=URI.create(url.replaceAll("/+$", "") + "/internal/ai/");
         try { signingKey=Keys.hmacShaKeyFor(Base64.getDecoder().decode(secret)); }
         catch (Exception e) { throw new IllegalStateException("AI_SERVICE_SECRET 必须是 Base64 编码的至少 32 字节密钥"); }
     }
-    // Interactive family/admin analysis uses the caller's key. Scheduled jobs use the record owner's key.
+    // Check the caller's entitlement for interactive requests and the owner's for scheduled jobs.
     public Long payer(Long ownerId) {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())
                 ? security.getCurrentUserId() : Objects.requireNonNull(ownerId);
     }
-    public String cacheScope(Long payerId) { return payerId + ":" + configs.revision(payerId); }
+    public void requireAccess(Long userId) { access.requireAccess(userId); }
+    public String cacheScope(Long payerId) {
+        requireAccess(payerId); // Must run before returning a previously generated AI report.
+        return payerId + ":" + configs.revision(payerId);
+    }
     public AiRequest prepare(Long payerId, String task, Map<String,String> variables,
                              List<AiRequest.Message> history, String message) {
+        requireAccess(payerId);
         var c=configs.credentials(payerId);
         return new AiRequest(payerId,c.provider(),c.apiKey(),c.model(),task,c.embeddingApiKey(),variables,history,message);
     }
     public String complete(AiRequest invocation) {
+        requireAccess(invocation.userId());
         if(!inFlight.tryAcquire()) throw new AiServiceException("AI 请求较多，请稍后重试");
         try {
             var response=http.send(request("complete",invocation),HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
@@ -68,12 +75,14 @@ public class AiClient implements AutoCloseable {
         finally { inFlight.release(); }
     }
     public void stream(AiRequest invocation, ChatService.StreamCallback callback) {
+        requireAccess(invocation.userId());
         if(!inFlight.tryAcquire()) { callback.onError(new AiServiceException("AI 请求较多，请稍后重试")); return; }
         try { streams.execute(() -> { try { readStream(invocation,callback); } finally { inFlight.release(); } }); }
         catch (RejectedExecutionException e) { inFlight.release(); callback.onError(new AiServiceException("AI 请求较多，请稍后重试")); }
     }
     private void readStream(AiRequest invocation, ChatService.StreamCallback callback) {
         try {
+            requireAccess(invocation.userId()); // Recheck queued work at actual dispatch time.
             var response=http.send(request("stream",invocation),HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream input=response.body()) {
                 if (response.statusCode()!=200) throw failure(response.statusCode());
@@ -117,7 +126,7 @@ public class AiClient implements AutoCloseable {
     }
     private AiServiceException failure(int status) {
         return new AiServiceException(switch(status) {
-            case 422 -> "API Key 无效、余额不足或模型不可用，请检查「AI 设置」";
+            case 422 -> "平台 AI 服务暂不可用，请稍后重试或联系管理员";
             case 429 -> "AI 请求较多，请稍后重试";
             default -> "AI 服务暂时不可用，请稍后重试";
         });

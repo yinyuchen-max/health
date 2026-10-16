@@ -19,4 +19,5 @@ function resolveBaseUrl(wxApi) {
   return environments[version]
 }
 
-module.exports = { resolveBaseUrl }
+const billingWebUrl = 'https://zpew.top/app/ai-settings'
+module.exports = { resolveBaseUrl, billingWebUrl }

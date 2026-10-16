@@ -108,7 +108,7 @@ class HealthKnowledgeRedisRepositoryTest {
     }
 
     @Test
-    void queryVectorsShouldPersistWithoutTtlAndInvalidateByContentAndModel() {
+    void queryVectorsShouldReuseAndInvalidateByContentAndModel() {
         when(model.embed(anyString())).thenReturn(Response.from(Embedding.from(new float[]{1, 0})));
         HealthKnowledgeRedisRepository repo = repository();
         repo.embedQuery("health query", 1L);
@@ -118,7 +118,30 @@ class HealthKnowledgeRedisRepositoryTest {
         ReflectionTestUtils.setField(repo, "embeddingModelName", "new-model");
         repo.embedQuery("changed query", 1L);
         verify(model, times(3)).embed(anyString());
-        verify(cache.values, never()).set(anyString(), anyString(), any(Duration.class));
+        verify(cache.redis, atLeastOnce()).execute(argThat(script -> script.getScriptAsString().contains("86400")), anyList(), any(Object[].class));
         assertEquals(1, cache.data.size());
+    }
+
+    @Test void queryContenderNeverBypassesDistributedLockToCallPaidModel() {
+        properties.setLockWait(Duration.ZERO);
+        cache.data.put(properties.key("query:v2:1:lock"),"other-owner");
+        try(var repo=repository()) {
+            assertThrows(IllegalStateException.class,()->repo.embedQuery("query",1L));
+            verifyNoInteractions(model);
+            assertEquals("other-owner",cache.data.get(properties.key("query:v2:1:lock")));
+        }
+    }
+
+    @Test void expiredQueryOwnerCannotOverwriteNewerVector() {
+        when(model.embed(anyString())).thenAnswer(i -> {
+            cache.data.put(properties.key("query:v2:1:lock"),"new-owner");
+            cache.data.put(properties.key("query:v2:1"),"newer-snapshot");
+            return Response.from(Embedding.from(new float[]{1,0}));
+        });
+        try(var repo=repository()) {
+            assertThrows(IllegalStateException.class,()->repo.embedQuery("query",1L));
+            assertEquals("newer-snapshot",cache.data.get(properties.key("query:v2:1")));
+            assertEquals("new-owner",cache.data.get(properties.key("query:v2:1:lock")));
+        }
     }
 }

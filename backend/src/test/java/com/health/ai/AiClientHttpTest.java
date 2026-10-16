@@ -16,10 +16,10 @@ import java.util.concurrent.atomic.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 class AiClientHttpTest {
-    @Test void realHttpContractBindsUserKeyAndBodyAndRelaysStreamAndSanitizesErrors() throws Exception {
+    @Test void realHttpContractBindsUserAndBodyAndRelaysStreamAndSanitizesErrors() throws Exception {
         byte[] key=new byte[32]; var json=new ObjectMapper(); var configs=mock(AiConfigService.class); var security=mock(SecurityUtil.class);
-        when(configs.credentials(1L)).thenReturn(new AiConfigService.Credentials("deepseek","test","key-of-user-one",null,"v1"));
-        when(configs.credentials(2L)).thenReturn(new AiConfigService.Credentials("dashscope","test2","key-of-user-two",null,"v2"));
+        when(configs.credentials(1L)).thenReturn(new AiConfigService.Credentials("deepseek","test","platform-key",null,"v1"));
+        when(configs.credentials(2L)).thenReturn(new AiConfigService.Credentials("dashscope","test2","platform-key",null,"v2"));
         when(configs.revision(1L)).thenReturn("v1"); when(security.getCurrentUserId()).thenReturn(1L);
         var failure=new AtomicReference<Throwable>(); var keys=new CopyOnWriteArrayList<String>(); var invalid=new AtomicBoolean();
         HttpServer server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
@@ -32,7 +32,7 @@ class AiClientHttpTest {
                 assertEquals(invocation.userId().toString(),claims.getSubject()); assertEquals(ContentHash.sha256(body),claims.get("bodyHash"));
                 assertTrue(claims.getExpiration().getTime()-claims.getIssuedAt().getTime()<=60000);
                 keys.add(invocation.apiKey()); String response;
-                if(invalid.get()) { response="upstream leaked key-of-user-one"; exchange.sendResponseHeaders(422,response.length()); }
+                if(invalid.get()) { response="upstream leaked platform-key"; exchange.sendResponseHeaders(422,response.length()); }
                 else if(exchange.getRequestURI().getPath().endsWith("stream")) {
                     assertEquals("stream",claims.get("operation")); exchange.getResponseHeaders().set("Content-Type","text/event-stream");
                     response="event: thinking\ndata: \"思考\"\n\nevent: token\ndata: \"回答\\n下一行\"\n\nevent: done\ndata: \"完整回答\"\n\n";
@@ -44,7 +44,7 @@ class AiClientHttpTest {
             } catch(Throwable e) { failure.set(e); }
             finally { exchange.close(); }
         }); server.start();
-        try(var client=new AiClient(configs,security,json,"http://127.0.0.1:"+server.getAddress().getPort(),Base64.getEncoder().encodeToString(key))) {
+        try(var client=new AiClient(configs,mock(AiAccessService.class),security,json,"http://127.0.0.1:"+server.getAddress().getPort(),Base64.getEncoder().encodeToString(key))) {
             SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("user-one","unused",List.of()));
             assertEquals(1L,client.payer(2L)); assertEquals("1:v1",client.cacheScope(1L)); SecurityContextHolder.clearContext();
             assertEquals(2L,client.payer(2L));
@@ -58,7 +58,7 @@ class AiClientHttpTest {
             });
             assertTrue(done.await(5,TimeUnit.SECONDS)); assertEquals("回答\n下一行",tokens.toString()); assertEquals("思考",thinking.toString()); assertEquals("完整回答",full.get());
             invalid.set(true); var e=assertThrows(AiServiceException.class,()->client.complete(client.prepare(1L,"chat",Map.of(),List.of(),"hello")));
-            assertFalse(e.getMessage().contains("key-of-user-one")); assertEquals(List.of("key-of-user-one","key-of-user-two","key-of-user-one","key-of-user-one"),keys);
+            assertFalse(e.getMessage().contains("platform-key")); assertEquals(List.of("platform-key","platform-key","platform-key","platform-key"),keys);
             if(failure.get()!=null) throw new AssertionError(failure.get());
         } finally { SecurityContextHolder.clearContext(); server.stop(0); }
     }

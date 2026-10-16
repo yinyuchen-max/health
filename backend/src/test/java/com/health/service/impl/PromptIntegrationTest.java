@@ -6,6 +6,7 @@ import com.health.domain.vo.HealthRecordVO;
 import com.health.service.*;
 import com.health.common.utils.SecurityUtil;
 import com.health.common.config.RuntimeSettings;
+import com.health.memory.LongTermMemoryService;
 import org.springframework.core.io.ClassPathResource;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -20,7 +21,9 @@ class PromptIntegrationTest {
         when(health.getHealthRecordsByUserId(1L,1,5)).thenReturn(Map.of("records",List.of(record)));
         when(sports.getSportRecordsByUserId(1L,1,5)).thenReturn(Map.of("records",List.of()));
         when(ai.complete(any())).thenReturn("健康建议");
-        var chat=new ChatServiceImpl(ai,mock(AppointmentConversationService.class),health,sports,mock(RedisChatMemoryStore.class),new RuntimeSettings());
+        var memories=mock(LongTermMemoryService.class);
+        when(memories.context(any())).thenReturn("暂无长期记忆");
+        var chat=new ChatServiceImpl(ai,mock(AppointmentConversationService.class),health,sports,mock(RedisChatMemoryStore.class),new RuntimeSettings(),memories);
         assertEquals("健康建议",chat.chat("你好",1L).getReply());
         ArgumentCaptor<Map<String,String>> context=ArgumentCaptor.forClass(Map.class);
         verify(ai).prepare(eq(1L),eq("chat"),context.capture(),anyList(),eq("你好"));

@@ -59,12 +59,12 @@ public class AiController {
                     finished.set(true); release.run(); emitter.complete();
                 }
                 @Override public void onError(Throwable error) {
-                    send("error","API Key 无效、额度不足或 AI 暂时不可用，请检查「AI 设置」后重试");
+                    send("error","平台 AI 服务暂不可用，请稍后重试或联系管理员");
                     finished.set(true); release.run(); emitter.complete();
                 }
             });
         } catch(Exception e) {
-            try { emitter.send(SseEmitter.event().name("error").data(json.writeValueAsString("AI 请求失败，请检查「AI 设置」后重试"))); }
+            try { emitter.send(SseEmitter.event().name("error").data(json.writeValueAsString("AI 请求失败，请稍后重试"))); }
             catch(Exception ignored) {}
             release.run(); emitter.complete();
         }

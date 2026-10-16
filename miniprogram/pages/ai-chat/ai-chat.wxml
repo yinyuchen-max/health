@@ -1,5 +1,5 @@
 <view class="chat-page">
-  <navigator url="/pages/ai-settings/ai-settings" style="padding: 16rpx 24rpx; color: #6366f1">AI 设置 · 配置自己的 API Key</navigator>
+  <navigator url="/pages/ai-settings/ai-settings" style="padding: 16rpx 24rpx; color: #6366f1">AI 服务 · 开通与续费</navigator>
   <!-- 消息列表 -->
   <scroll-view
     class="chat-scroll"

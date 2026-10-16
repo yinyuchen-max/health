@@ -128,7 +128,32 @@ jwt:
 ai:
   service-url: ${AI_SERVICE_URL:http://127.0.0.1:8081}
   service-secret: ${AI_SERVICE_SECRET}
-  key-encryption-key: ${AI_KEY_ENCRYPTION_KEY}
+  payment:
+    enabled: ${AI_PAYMENT_ENABLED:false}
+    public-base-url: ${PAYMENT_PUBLIC_BASE_URL:}
+    plus-cents: ${AI_PLUS_CENTS:990}
+    pro-cents: ${AI_PRO_CENTS:1990}
+    promax-cents: ${AI_PROMAX_CENTS:2990}
+    wechat:
+      enabled: ${WECHAT_PAY_ENABLED:false}
+      app-id: ${WECHAT_PAY_APP_ID:}
+      merchant-id: ${WECHAT_PAY_MERCHANT_ID:}
+      merchant-serial-number: ${WECHAT_PAY_MERCHANT_SERIAL:}
+      private-key-path: ${WECHAT_PAY_PRIVATE_KEY_PATH:}
+      public-key-path: ${WECHAT_PAY_PUBLIC_KEY_PATH:}
+      public-key-id: ${WECHAT_PAY_PUBLIC_KEY_ID:}
+      api-v3-key: ${WECHAT_PAY_API_V3_KEY:}
+    alipay:
+      enabled: ${ALIPAY_ENABLED:false}
+      app-id: ${ALIPAY_APP_ID:}
+      seller-id: ${ALIPAY_SELLER_ID:}
+      private-key-path: ${ALIPAY_PRIVATE_KEY_PATH:}
+      public-key-path: ${ALIPAY_PUBLIC_KEY_PATH:}
+  platform:
+    provider: ${AI_PLATFORM_PROVIDER:deepseek}
+    model: ${AI_PLATFORM_MODEL:deepseek-flash}
+    api-key: ${AI_PLATFORM_API_KEY:}
+    revision: ${AI_PLATFORM_REVISION:1}
 
 langchain4j:
   fallback:

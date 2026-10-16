@@ -23,6 +23,7 @@ ai:
   prompts:
     directory: ${AI_PROMPTS_DIRECTORY:./prompts}
   knowledge:
+    embedding-api-key: ${AI_EMBEDDING_API_KEY:}
     document: ${AI_KNOWLEDGE_DOCUMENT:classpath:rag/health-knowledge.md}
     max-snippets: ${RAG_MAX_SNIPPETS:6}
     min-score: ${RAG_MIN_SCORE:0.1}

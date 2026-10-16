@@ -1,6 +1,6 @@
 # 健康管理系统：架构与技术实现
 
-项目采用核心业务后端与独立 AI 服务的双进程架构。核心后端负责身份认证、数据授权、业务事务和通知调度；AI 服务负责模型调用、Prompt 与知识检索。Web 和微信小程序统一访问核心后端，用户自行配置模型 API Key。
+项目采用核心业务后端与独立 AI 服务的双进程架构。核心后端负责身份认证、数据授权、业务事务和通知调度；AI 服务负责模型调用、Prompt 与知识检索。Web 和微信小程序统一访问核心后端，模型由平台统一提供，普通用户按月付费，管理员免费。
 
 ## 架构与服务边界
 
@@ -11,7 +11,7 @@ flowchart LR
     Core --> Redis[(核心 Redis DB 0)]
     Core -->|HTTP JSON / SSE + 内部签名| AI[AI 服务 :8081]
     AI --> AIRedis[(AI Redis DB 1)]
-    AI -->|用户 API Key / HTTPS| Provider[DeepSeek / 百炼]
+    AI -->|平台 API Key / HTTPS| Provider[DeepSeek / 百炼]
     Core --> MQ[RabbitMQ]
     MQ --> Consumer[核心后端通知消费者]
 ```
@@ -69,7 +69,7 @@ WHERE id = ? AND deleted = 0 AND version = ?;
 
 实现：[`FamilyService`](backend/src/main/java/com/health/service/FamilyService.java)、[`V7 迁移`](backend/src/main/resources/db/migration/V7__add_family_members.sql)。
 
-## AI 服务通信与用户密钥
+## AI 服务通信与付费权限
 
 | 内部接口 | 用途 | 响应 |
 | --- | --- | --- |
@@ -82,36 +82,62 @@ WHERE id = ? AND deleted = 0 AND version = ?;
 
 每次请求由独立的 `AI_SERVICE_SECRET` 签发 HS256 JWT，有效期 60 秒，绑定用户 ID、请求体 SHA-256、调用类型和随机请求 ID。AI 服务验证签名、时间、issuer/audience、请求体摘要、接口类型及请求体用户 ID，再通过 Redis `SET NX` 记录请求 ID、拒绝重放。Redis 不可用时返回 503，拒绝继续调用模型。
 
-这套凭证与用户登录 Token 分开。默认仅监听本机，Compose 不映射 AI 宿主机端口；服务间请求含解密后的用户 Key，签名不提供传输加密，跨主机部署需使用 HTTPS/mTLS 或加密私网。
+这套凭证与用户登录 Token 分开。默认仅监听本机，Compose 不映射 AI 宿主机端口；服务间请求含平台模型 Key，签名不提供传输加密，跨主机部署需使用 HTTPS/mTLS 或加密私网。
 
-### BYOK 与加密存储
+### 平台模型与按月付费
 
-- `GET/PUT/DELETE /api/ai/settings` 从当前登录身份取得用户 ID；读取接口只返回是否配置、供应商与模型，不回显 Key。
-- Key 使用 AES-256-GCM 加密，随机 12 字节 nonce，AAD 绑定用户 ID，防止密文被交换到其他用户后解密。`AI_KEY_ENCRYPTION_KEY` 仅配置在核心后端。
-- 核心后端按请求解密并传递 Key；AI 服务为当前请求创建模型客户端，不保留用户凭据缓存。供应商地址固定，用户只能选择支持的供应商和模型。
-- 个人请求使用当前用户的 Key；有权限查看家人或管理员目标报告时使用查看者的 Key；后台提醒使用提醒所属用户的 Key。没有平台公共 Key 回退。
-- 凭据对象 `toString` 脱敏，供应商请求/响应日志关闭。替换或删除配置影响后续请求，已经发出的模型请求可能继续完成。
+- 平台通过 `AI_PLATFORM_API_KEY`、`AI_PLATFORM_PROVIDER` 和 `AI_PLATFORM_MODEL` 配置生成模型；公共知识向量使用独立的 `AI_EMBEDDING_API_KEY`。用户不再填写或承担向量模型账号的费用。
+- Plus ¥9.9/月、Pro ¥19.9/月、Pro Max ¥29.9/月，目前功能相同。网页支持微信 Native 与支付宝当面付扫码，每笔订单一个自然月，不自动扣费。同档续费从现有到期时间顺延，到期后可换档。
+- 普通用户仅在存在有效付费资格时可使用 AI。管理员豁免按数据库当前身份判断，禁用/删除账号不豁免。聊天、报告（含缓存）、预约提取、异步长期记忆任务在服务端校验；未付费返回 HTTP 402。
+- `GET /api/ai/access` 返回当前认证用户的状态，不接受目标用户 ID。旧 `PUT/DELETE /api/ai/settings` 返回 403；历史 `user_ai_config` 保留但不再读取，避免破坏旧数据。
+- 支付金额和套餐在后端确定；官方 SDK 验签、微信回调解密、金额/商户/应用校验、用户行锁、订单行锁和唯一流水约束共同保护开通。重复通知只处理一次，订单与资格同事务提交；后台独立线程主动查单补偿通知丢失。
+- 小程序展示同一账号的套餐与使用资格，复制网页入口完成支付；本轮未接入小程序 JSAPI 直接支付。记忆查看/删除保持可用，不依赖付费。
 
-实现：[`AiClient`](backend/src/main/java/com/health/ai/AiClient.java)、[`AiKeyCipher`](backend/src/main/java/com/health/ai/AiKeyCipher.java)、[`AiConfigService`](backend/src/main/java/com/health/ai/AiConfigService.java)、[`InternalAuthorization`](ai-service/src/main/java/com/health/ai/InternalAuthorization.java)。
+部署参数、回调地址及验收步骤见 [AI 支付与平台模型配置](docs/ai-billing.md)。
+
+### 用户长期记忆
+
+聊天同时使用两层记忆：Redis 保存最近 20 条消息（默认 7 天 TTL），MySQL 的 `user_memory` 保存用户明确自述的习惯、偏好、目标和健康情况。长期记忆按认证用户隔离，默认启用，可在网页「AI 服务与记忆」中关闭、查看、修改、确认冲突或删除。关闭会保留已有记忆，但不再提取或注入聊天。
+
+普通健康聊天回复成功后（SSE 在完整回复结束后），独立有界线程池异步调用平台配置的模型，并重新校验该用户的使用资格，使用 `memory-extract-system.md` 抽取最多 8 条候选事实。提取仅使用当前用户消息和已有记忆，不从 AI 回答生成事实。模型输出 `ADD/UPDATE/NOOP/CONFLICT/DELETE`、稳定事实键、原文证据、主体、陈述类型和时间属性；后端校验结构、类别、长度、证据是否逐字出现在本次用户消息中，再执行参数化 SQL。疑问、假设及主体识别依赖提示词和模型判断，结构校验不能证明语义正确，用户可在设置页纠正误记。预约专用流程不触发提取。
+
+- 每个账号最多保留 50 条有效记忆，按事实键合并，不为新事实自动淘汰旧事实。临时状态有效期为 1–30 天，过期后不再读取；稳定事实保留到修改或删除。现阶段读取全部有效事实，不使用向量检索。
+- 明确改变习惯或目标时替代旧值；健康事实矛盾或含糊变化标记为 `CONFLICT`，保留原说法和新说法及其证据，用户确认前不注入长期上下文。记忆属于用户自述，不是医学诊断。
+- 用户状态行锁、revision 和轮次序号约束并发写入；旧轮次不能覆盖更新的同一事实。修改、删除、清空和切换开关使旧任务失效，删除之后到达的模型结果不能恢复旧记忆。
+- 修改、删除、清空或关闭时同时清除服务端 Redis 最近对话，防止被遗忘的信息继续通过旧上下文传给模型。Redis 清除失败会让管理操作失败并回滚数据库修改。已开始的模型请求无法撤回，但其后续记忆写入会被拒绝。浏览器本地显示的对话历史单独管理，不会自动作为请求上下文上传；重新发送或重新生成旧消息可能再次提取其中的信息。
+- 提取会额外调用一次平台模型，费用由平台承担；未付费或到期的用户不会发起该调用。无效输出、服务失败和队列满时跳过提取，不影响聊天回复，不自动重试。任务只在进程内排队，进程重启会丢弃尚未完成的任务；已入库的记忆会保留。
+
+| 接口 | 用途 |
+| --- | --- |
+| `GET /api/chat/memories` | 查看开关、有效记忆及待确认冲突 |
+| `PUT /api/chat/memories/settings` | 设置 `{"enabled":true/false}` |
+| `PUT /api/chat/memories/{id}` | 修改或确认 `{"content":"确认后的内容"}` |
+| `DELETE /api/chat/memories/{id}` | 删除自己的指定记忆 |
+| `DELETE /api/chat/memories` | 清空自己的全部记忆及服务端最近对话 |
+
+仅普通聊天接入长期记忆，健康报告仍使用原有数据库档案及知识检索。首次启动更新后的核心后端时，Flyway 自动执行 V9 迁移；AI 服务和前端也需同步更新。
+
+实现：[`LongTermMemoryService`](backend/src/main/java/com/health/memory/LongTermMemoryService.java)、[`MemoryExtraction`](backend/src/main/java/com/health/memory/MemoryExtraction.java)、[`V9 迁移`](backend/src/main/resources/db/migration/V9__add_user_long_term_memory.sql)、[`记忆管理组件`](frontend/src/components/UserMemories.vue)。
 
 ## 报告缓存、知识检索与降级
 
 ### 数据指纹缓存
 
-健康报告将用户资料、健康/运动/历史记录和调用者 AI 配置 revision 纳入 SHA-256 指纹。缓存键同时区分目标用户与调用者，防止不同查看者复用不属于其配置的 AI 报告。
+健康报告将用户资料、健康/运动/历史记录和平台 AI 配置 revision 纳入 SHA-256 指纹。缓存键同时区分目标用户与调用者，隔离不同查看者的报告缓存；每次读取缓存前仍检查查看者的付费资格。
 
-数据与配置不变时复用报告；记录变化、更换 Key/模型或删除配置后指纹变化，重新生成。缓存保留每组目标用户与调用者的最新快照，不为每个 revision 新建键，也不设置时间过期。AI 不可用、未配置或超时时返回规则分析，并用 `analysisSource=RULES` 标记；故障降级结果不写入长期报告缓存，恢复后可再次生成。
+数据与配置不变时复用报告；记录变化、更换模型或递增 `AI_PLATFORM_REVISION` 后指纹变化，重新生成。缓存保留每组目标用户与调用者的最新快照，不为每个 revision 新建键，也不设置时间过期。已授权用户遇到 AI 不可用、平台未配置或超时时返回规则分析，并用 `analysisSource=RULES` 标记；故障降级结果不写入长期报告缓存，恢复后可再次生成。
 
 实现：[`SmartHealthServiceImpl`](backend/src/main/java/com/health/service/impl/SmartHealthServiceImpl.java)。
 
 ### 知识检索与 Prompt
 
-默认对本地 Markdown 知识库做关键词检索，不产生向量模型费用。用户可额外配置百炼向量 Key 启用向量检索：
+服务端配置百炼向量 Key 后，在启动就绪时统一构建/恢复公共 Markdown 知识索引；未配置或故障时回退关键词检索。
 
-- 按用户划分知识索引和查询向量命名空间，避免跨用户复用计费缓存。
-- 文档内容与模型标识计算哈希，Redis 持久化完整向量快照；内容不变时重启可恢复，跳过重复嵌入。
-- 重建使用 Redis 锁；Lua 校验锁持有者后保存快照，释放时比较随机令牌，避免过期持有者覆盖快照或误删锁。
-- 向量检索异常回退本地检索，启动阶段不使用任何用户 Key 预热。
+- 知识内容和 embedding 模型共同决定公共索引命名空间，所有用户共享；每个 AI 实例长期复用一个内存索引，避免逐请求读取完整 JSON。
+- Redis 保存完整向量及文本快照，内容不变时重启从快照恢复；不同知识版本可在滚动部署时并存。
+- 重建锁自动续期；Lua 校验锁所有权后保存与释放，失去锁的实例无法覆盖快照。失败重建有一分钟冷却。
+- 查询向量使用平台密钥生成。每用户保留最新查询一天，避免保留无限查询；进程内与 Redis 锁合并并发生成，拿不到锁时回退关键词检索，不绕过锁调用收费模型。
+- 此公共索引仅包含平台知识文档，不混入个人健康记录、聊天或长期记忆。
 
 向量快照存储在 Redis，实际相似度检索使用 JVM 内的 LangChain4j `InMemoryEmbeddingStore`。Prompt 使用独立 Markdown 模板，支持外部覆盖，启动时加载并检查模板变量。
 
@@ -143,18 +169,20 @@ WHERE id = ? AND deleted = 0 AND version = ?;
 
 ## 数据迁移与部署约束
 
-Flyway 管理 schema 版本，V6/V7/V8 分别增加健康记录版本、家庭关系与用户 AI 配置。已有数据库升级不重复导入初始化 SQL，基线与历史校验和处理见 [数据库迁移说明](docs/database-initialization.md)。
+Flyway 管理 schema 版本，V6/V7/V8 分别增加健康记录版本、家庭关系与旧用户 AI 配置，V9 增加长期记忆，V10 增加付费资格和支付订单。已有数据库升级不重复导入初始化 SQL，基线与历史校验和处理见 [数据库迁移说明](docs/database-initialization.md)。
 
 | 配置 | 作用 |
 | --- | --- |
 | `JWT_SECRET` | 用户 Access JWT 签名 |
 | `AI_SERVICE_SECRET` | 两个服务共享的内部请求签名密钥 |
-| `AI_KEY_ENCRYPTION_KEY` | 核心后端独占的用户 Key 加密主密钥 |
+| `AI_PLATFORM_API_KEY` | 核心后端持有的平台模型密钥 |
+| `AI_EMBEDDING_API_KEY` | AI 服务持有的公共知识向量密钥 |
+| `AI_PAYMENT_ENABLED` | 真实支付开关，默认关闭；配置商户后启用 |
 | `AI_SERVICE_URL` | AI 服务 HTTP 地址 |
 | `AI_REDIS_DATABASE` | AI 防重放与向量缓存，默认 DB 1 |
 | `TRAFFIC_*` | 全局令牌桶与实例并发参数 |
 
-两个 AI 基础设施密钥分别生成独立的 32 字节随机值并以 Base64 配置，不能拿供应商 API Key 替代。加密主密钥需备份，直接更换会导致已有 Key 密文无法解密；服务签名密钥轮换需两端同步。
+`AI_SERVICE_SECRET` 使用至少 32 字节随机值并以 Base64 配置，不能拿供应商 API Key 替代，轮换需两端同步。平台模型密钥和向量密钥分别使用 `AI_PLATFORM_API_KEY` 与 `AI_EMBEDDING_API_KEY`。
 
 两个服务独立打包与启动，AI 故障不阻止核心后端启动。认证 Lua 当前按单机 Redis 多键设计，迁移 Redis Cluster 需调整同槽键结构；AI 副本必须共享防重放 Redis，同一业务数据库的核心后端实例必须共享限流桶配置。DB 0/1 是逻辑划分，不等于独立 Redis 故障域。
 
@@ -176,7 +204,8 @@ npm --prefix frontend run build
 | 乐观锁与事务 | H2 执行真实 SQL，验证竞争更新仅一个成功、版本冲突、软删除竞争与历史同步回滚 |
 | 家庭关系 | H2 执行 V7 与事务，验证双向邀请竞争、解绑授权、重复提醒和接收人隔离 |
 | 认证与刷新 | JWT/Cookie/CSRF、凭据轮换、用户状态变化、故障拒绝及客户端并发刷新 |
-| AI 内部通信 | 临时 HTTP 服务验证请求体、签名与 SSE；校验防重放、错误脱敏和用户密钥绑定 |
+| AI 内部通信 | 临时 HTTP 服务验证请求体、签名与 SSE；校验防重放、错误脱敏、认证用户绑定和付费调用边界 |
+| 支付与开通 | 真实 RSA/AES 通知验签、H2 事务、并发幂等、重复流水拒绝、失败回滚、管理员豁免与到期拒绝 |
 | 缓存与检索 | 配置 revision 失效、查看者隔离、向量快照恢复和重建锁保护 |
 | 流量保护 | Lua 令牌桶及真实异步 HTTP 生命周期验证，覆盖 SSE 额度释放与超载响应 |
 

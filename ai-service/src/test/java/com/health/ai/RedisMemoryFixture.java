@@ -36,6 +36,8 @@ public class RedisMemoryFixture {
                         if (!args[0].equals(data.get(keys.get(0)))) {
                             return 0L;
                         }
+                        DefaultRedisScript<?> script=i.getArgument(0);
+                        if(script.getScriptAsString().contains("pexpire")) return 1L;
                         if (keys.size() == 2) {
                             data.put(keys.get(1), (String) args[1]);
                         } else {
