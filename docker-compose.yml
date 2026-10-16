@@ -145,18 +145,6 @@ services:
       - ./certbot/conf:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
 
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: health-cloudflared
-    restart: unless-stopped
-    depends_on:
-      - frontend
-    command: tunnel --config /etc/cloudflared/config.yml run
-    volumes:
-      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
-      - ./cloudflared/credentials.json:/etc/cloudflared/credentials.json:ro
-
-
 volumes:
   mysql-data:
   redis-data:
