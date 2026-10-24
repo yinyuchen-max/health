@@ -23,6 +23,7 @@ public class RuntimeSettings {
 
     @Getter @Setter
     public static class ChatMemory {
+        /** Compatibility setting only. Online chat now compacts by the rendered token budget. */
         @Min(2) private int maxMessages = 20;
         @Min(1) private int contextRecordLimit = 5;
         @NotNull private Duration ttl = Duration.ofDays(7);

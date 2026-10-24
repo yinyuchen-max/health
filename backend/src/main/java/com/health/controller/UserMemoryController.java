@@ -22,6 +22,8 @@ public class UserMemoryController {
     }
     public record SettingsUpdate(@NotNull Boolean enabled) {}
     public record Edit(@NotBlank @Size(max=500) String content) {}
+    public record Pin(@NotNull Boolean pinned) {}
+    public record Feedback(@NotBlank String retrievalId,@NotBlank String feedback) {}
     @GetMapping public Result<LongTermMemoryService.View> list() {
         return Result.success(memories.view(security.getCurrentUserId()));
     }
@@ -41,5 +43,25 @@ public class UserMemoryController {
     @RateLimit(key="memory-clear", maxRequests=10, timeWindow=1, timeUnit=TimeUnit.MINUTES, limitBy=LimitType.USER)
     public Result<Void> clear() {
         memories.clear(security.getCurrentUserId()); return Result.success();
+    }
+    @GetMapping("/cognition") public Result<LongTermMemoryService.CognitiveView> cognition() {
+        return Result.success(memories.cognition(security.getCurrentUserId()));
+    }
+    @GetMapping("/{id}/versions") public Result<java.util.List<com.health.memory.CognitiveMemoryRepository.Version>> versions(@PathVariable Long id) {
+        return Result.success(memories.versions(security.getCurrentUserId(),id));
+    }
+    @GetMapping("/{id}/evidence") public Result<java.util.List<com.health.memory.CognitiveMemoryRepository.Episode>> evidence(@PathVariable Long id) {
+        return Result.success(memories.evidence(security.getCurrentUserId(),id));
+    }
+    @PutMapping("/{id}/pin") public Result<Void> pin(@PathVariable Long id,@Valid @RequestBody Pin pin) {
+        memories.pin(security.getCurrentUserId(),id,pin.pinned());return Result.success();
+    }
+    @DeleteMapping("/episodes/{id}") public Result<Void> episode(@PathVariable String id) {
+        memories.deleteEpisode(security.getCurrentUserId(),id);return Result.success();
+    }
+    @PostMapping("/feedback")
+    @RateLimit(key="memory-feedback",maxRequests=30,timeWindow=1,timeUnit=TimeUnit.MINUTES,limitBy=LimitType.USER)
+    public Result<Void> feedback(@Valid @RequestBody Feedback feedback) {
+        memories.feedback(security.getCurrentUserId(),feedback.retrievalId(),feedback.feedback());return Result.success();
     }
 }

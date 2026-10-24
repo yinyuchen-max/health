@@ -181,6 +181,14 @@ medical:
 
 # 可调运行策略；Duration 使用 7d、15m、60s 等格式，修改后重启后端。
 health:
+  memory:
+    max-semantic-memories: ${MEMORY_MAX_SEMANTIC_MEMORIES:500}
+    max-episodes: ${MEMORY_MAX_EPISODES:2000}
+    recall-limit: ${MEMORY_RECALL_LIMIT:8}
+    embedding-revision: ${MEMORY_EMBEDDING_REVISION:1}
+    archived-retention-days: ${MEMORY_ARCHIVED_RETENTION_DAYS:90}
+    dispatch-delay-ms: ${MEMORY_DISPATCH_DELAY_MS:3000}
+    maintenance-delay-ms: ${MEMORY_MAINTENANCE_DELAY_MS:600000}
   # 所有用户共享的 API 入口保护，单实例并发上限预留数据库后台任务余量。
   traffic-protection:
     enabled: ${TRAFFIC_PROTECTION_ENABLED:true}
@@ -190,6 +198,7 @@ health:
     redis-key: ${TRAFFIC_REDIS_KEY:rate:limit:global:api}
   runtime:
     chat-memory:
+      # 兼容旧配置；在线聊天现按 AI 服务完整 token 预算压缩，不按条数截断。
       max-messages: ${CHAT_MEMORY_MAX_MESSAGES:20}
       context-record-limit: ${CHAT_CONTEXT_RECORD_LIMIT:5}
       ttl: ${CHAT_MEMORY_TTL:7d}

@@ -1,221 +1,126 @@
 package com.health.memory;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.health.ai.AiClient;
-import com.health.ai.AiRequest;
 import com.health.common.exception.BusinessException;
-import com.health.service.impl.RedisChatMemoryStore;
-import org.h2.jdbcx.JdbcDataSource;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
-import org.springframework.transaction.support.TransactionTemplate;
-
 import java.time.LocalDateTime;
-import java.util.*;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.List;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class LongTermMemoryServiceTest {
-    private final ObjectMapper json = new ObjectMapper();
-    private final AiClient ai = mock(AiClient.class);
-    private final RedisChatMemoryStore recent = mock(RedisChatMemoryStore.class);
-    private final Deque<Runnable> jobs = new ArrayDeque<>();
-    private UserMemoryRepository repository;
-    private TransactionTemplate transactions;
-    private JdbcTemplate jdbc;
-    private LongTermMemoryService service;
-
-    @BeforeEach void setup() {
-        JdbcDataSource ds = new JdbcDataSource();
-        ds.setURL("jdbc:h2:mem:memory-"+UUID.randomUUID()+";MODE=MySQL;DB_CLOSE_DELAY=-1");
-        jdbc = new JdbcTemplate(ds);
-        jdbc.execute("CREATE TABLE sys_user(id BIGINT PRIMARY KEY)");
-        jdbc.update("INSERT INTO sys_user(id) VALUES(1),(2)");
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V9__add_user_long_term_memory.sql")).execute(ds);
-        repository = new UserMemoryRepository(jdbc);
-        transactions = new TransactionTemplate(new DataSourceTransactionManager(ds));
-        service = new LongTermMemoryService(repository, transactions, ai, new MemoryExtraction(json), json, jobs::add, recent);
-        when(ai.prepare(anyLong(), anyString(), anyMap(), anyList(), anyString())).thenAnswer(inv ->
-                new AiRequest(inv.getArgument(0), "deepseek", "private", "model", inv.getArgument(1), null,
-                        inv.getArgument(2), inv.getArgument(3), inv.getArgument(4)));
+    @Test void successfulChatPersistsDurableWorkBeforeAnyPaidExtraction() throws Exception {
+        var f=new CognitiveMemoryFixture();f.output(f.fact("ADD","diet.preference","我喜欢清淡饮食",false));
+        var turn=f.service.beginTurn(1L,"饮食");var saved=new AtomicBoolean();
+        f.service.completeTurn(turn,"我喜欢清淡饮食",()->saved.set(true));
+        assertTrue(saved.get());verifyNoInteractions(f.ai);assertEquals(1,f.repository.countJobs(1L,"PENDING"));
+        f.drain();
+        assertTrue(f.service.context(f.service.beginTurn(1L,"饮食")).contains("清淡"));
+        assertTrue(f.service.view(2L).memories().isEmpty());
+        assertEquals(1,f.repository.episodes(1L,100,true).size());
+        assertEquals(1,f.service.evidence(1L,f.id("diet.preference")).size());
     }
-
-    private MemoryExtraction.Candidate fact(String operation, String key, String content, boolean explicit) {
-        String category = key.split("\\.")[0];
-        return new MemoryExtraction.Candidate(operation, category, key, content, content,
-                "ongoing", null, explicit, category.equals("family") ? "family" : "self", "asserted");
+    @Test void repeatedFactsAddEvidenceWithoutCreatingSemanticDuplicatesAndUpdatesHaveHistory() throws Exception {
+        var f=new CognitiveMemoryFixture();
+        f.remember("ADD","goal.target_weight","目标65公斤",false);
+        f.remember("NOOP","goal.target_weight","目标65公斤",false);
+        assertEquals(1,f.service.view(1L).memories().size());
+        assertEquals(2,f.service.evidence(1L,f.id("goal.target_weight")).size());
+        f.remember("UPDATE","goal.target_weight","目标改为60公斤",true);
+        var versions=f.service.versions(1L,f.id("goal.target_weight"));
+        assertEquals(2,versions.size());assertNotNull(versions.get(1).validTo());
+        assertEquals("目标改为60公斤",f.repository.fact(1L,"goal.target_weight").content());
+        assertFalse(f.service.context(f.service.beginTurn(1L,"体重目标")).contains("65公斤"));
+        assertTrue(f.service.context(f.service.beginTurn(1L,"以前的体重目标")).contains("65公斤"));
     }
-    private void extract(LongTermMemoryService.Snapshot snapshot, String message, MemoryExtraction.Candidate... facts) throws Exception {
-        when(ai.complete(any())).thenReturn(json.writeValueAsString(new MemoryExtraction.Result(List.of(facts))));
-        service.completeTurn(snapshot, message, () -> {});
-        jobs.removeFirst().run();
+    @Test void healthDisputesAreExcludedFromBothSemanticAndEpisodicRecallUntilConfirmed() throws Exception {
+        var f=new CognitiveMemoryFixture();f.remember("ADD","health.allergy.peanut","我对花生过敏",false);
+        f.remember("UPDATE","health.allergy.peanut","我对花生不过敏",true);
+        var fact=f.repository.fact(1L,"health.allergy.peanut");assertEquals("CONFLICT",fact.status());
+        assertFalse(f.service.context(f.service.beginTurn(1L,"花生")).contains("花生"));
+        f.service.edit(1L,fact.id(),"我对花生不过敏");
+        assertTrue(f.service.context(f.service.beginTurn(1L,"花生")).contains("花生不过敏"));
+        assertEquals(3,f.service.versions(1L,fact.id()).size());
     }
-
-    @Test void successfulTurnExtractsOnWorkerUsesOwnersKeyAndSurvivesNewServiceInstance() throws Exception {
-        var turn = service.beginTurn(1L);
-        AtomicBoolean saved = new AtomicBoolean();
-        when(ai.complete(any())).thenReturn(json.writeValueAsString(new MemoryExtraction.Result(
-                List.of(fact("ADD", "diet.preference", "我喜欢清淡饮食", false)))));
-        service.completeTurn(turn, "我喜欢清淡饮食", () -> saved.set(true));
-        assertTrue(saved.get()); verifyNoInteractions(ai);
-        jobs.removeFirst().run();
-        verify(ai).prepare(eq(1L), eq("memory-extract"), anyMap(), eq(List.of()), eq("我喜欢清淡饮食"));
-        var restarted = new LongTermMemoryService(repository, transactions, ai, new MemoryExtraction(json), json, jobs::add, recent);
-        assertTrue(restarted.context(restarted.beginTurn(1L)).contains("清淡饮食"));
-        assertTrue(restarted.view(2L).memories().isEmpty());
+    @Test void olderDelayedExtractionCannotReplaceLaterGoal() throws Exception {
+        var f=new CognitiveMemoryFixture();
+        var earlier=f.service.beginTurn(1L,"目标65公斤");f.service.completeTurn(earlier,"目标65公斤",()->{});
+        var earlyJob=f.repository.due(LocalDateTime.now()).get(0);
+        var later=f.service.beginTurn(1L,"目标60公斤");f.service.completeTurn(later,"目标60公斤",()->{});
+        var lateJob=f.repository.due(LocalDateTime.now()).stream().filter(j->j.turn()==later.turn()).findFirst().orElseThrow();
+        f.output(f.fact("ADD","goal.target_weight","目标60公斤",false));f.processor.process(lateJob.id());
+        f.repository.due(LocalDateTime.now()).stream().filter(j->j.type().equals("CONSOLIDATE")).forEach(j->f.processor.process(j.id()));
+        f.output(f.fact("UPDATE","goal.target_weight","目标65公斤",true));f.processor.process(earlyJob.id());f.drain();
+        assertEquals("目标60公斤",f.repository.fact(1L,"goal.target_weight").content());
     }
-
-    @Test void deduplicatesAndExplicitGoalUpdateReplacesValue() throws Exception {
-        extract(service.beginTurn(1L), "目标65公斤", fact("ADD", "goal.target_weight", "目标65公斤", false));
-        extract(service.beginTurn(1L), "目标65公斤", fact("NOOP", "goal.target_weight", "目标65公斤", false));
-        assertEquals(1, service.view(1L).memories().size());
-        extract(service.beginTurn(1L), "目标改为60公斤", fact("UPDATE", "goal.target_weight", "目标改为60公斤", true));
-        assertEquals("目标改为60公斤", service.view(1L).memories().get(0).content());
+    @Test void deletingFactClearsEventsVersionsVectorsAndCancelsOldTasks() throws Exception {
+        var f=new CognitiveMemoryFixture();f.remember("ADD","diet.preference","偏好清淡",false);Long id=f.id("diet.preference");
+        var old=f.service.beginTurn(1L,"偏好清淡");f.service.completeTurn(old,"偏好清淡",()->{});
+        f.repository.vector(1L,new CognitiveMemoryRepository.Vector("SEMANTIC",id.toString(),1,"hash","model",2,"[1,0]"));
+        f.service.delete(1L,id);f.drain();
+        assertTrue(f.repository.episodes(1L,100,true).isEmpty());assertTrue(f.repository.vectors(1L).isEmpty());
+        assertTrue(f.repository.versions(1L,id).isEmpty());assertTrue(f.repository.retrievals(1L).isEmpty());
+        var saved=new AtomicBoolean();f.service.completeTurn(old,"旧请求",()->saved.set(true));assertFalse(saved.get());
+        verify(f.recent).clearStrict(1L);verify(f.working).clearStrict(1L);
     }
-
-    @Test void healthContradictionRequiresConfirmationAndIsExcludedFromPrompt() throws Exception {
-        extract(service.beginTurn(1L), "我对花生过敏", fact("ADD", "health.allergy.peanut", "我对花生过敏", false));
-        extract(service.beginTurn(1L), "我对花生不过敏", fact("UPDATE", "health.allergy.peanut", "我对花生不过敏", true));
-        var entry = service.view(1L).memories().get(0);
-        assertEquals("CONFLICT", entry.status()); assertEquals("我对花生过敏", entry.content());
-        assertEquals("我对花生不过敏", entry.pendingContent());
-        assertFalse(service.context(service.beginTurn(1L)).contains("花生"));
-        service.edit(1L, entry.id(), "我对花生不过敏");
-        assertEquals("ACTIVE", service.view(1L).memories().get(0).status());
-        assertTrue(service.context(service.beginTurn(1L)).contains("花生不过敏"));
+    @Test void disableThenReenableDoesNotRunOldQueuedWorkAndDisabledChatsKeepRecentContext() throws Exception {
+        var f=new CognitiveMemoryFixture();var turn=f.service.beginTurn(1L,"清淡");f.service.completeTurn(turn,"清淡",()->{});
+        f.service.setEnabled(1L,false);var disabled=f.service.beginTurn(1L,"饮食");var saved=new AtomicBoolean();
+        f.service.completeTurn(disabled,"饮食",()->saved.set(true));assertTrue(saved.get());
+        f.service.setEnabled(1L,true);f.drain();verifyNoInteractions(f.ai);
+        assertFalse(f.service.context(disabled).contains("清淡"));
     }
-
-    @Test void olderModelResponseCannotOverwriteLaterTurn() {
-        var earlier = service.beginTurn(1L); var later = service.beginTurn(1L);
-        service.apply(later, List.of(fact("ADD", "goal.target_weight", "60公斤", false)));
-        service.apply(earlier, List.of(fact("UPDATE", "goal.target_weight", "65公斤", true)));
-        assertEquals("60公斤", service.view(1L).memories().get(0).content());
+    @Test void allManagementOperationsAreScopedToOwner() throws Exception {
+        var f=new CognitiveMemoryFixture();f.remember("ADD","diet.preference","清淡",false);Long id=f.id("diet.preference");
+        assertThrows(BusinessException.class,()->f.service.delete(2L,id));
+        assertThrows(BusinessException.class,()->f.service.edit(2L,id,"伪造"));
+        assertThrows(BusinessException.class,()->f.service.versions(2L,id));
+        assertThrows(BusinessException.class,()->f.service.evidence(2L,id));
+        assertThrows(BusinessException.class,()->f.service.pin(2L,id,true));
+        var episode=f.repository.episodes(1L,10,true).get(0);
+        assertThrows(BusinessException.class,()->f.service.deleteEpisode(2L,episode.id()));
+        f.service.clear(2L);assertEquals(1,f.service.view(1L).memories().size());
     }
-
-    @Test void deletingWhileExtractionRunsCannotResurrectDataOrRecentHistory() throws Exception {
-        extract(service.beginTurn(1L), "清淡", fact("ADD", "diet.preference", "清淡", false));
-        var running = service.beginTurn(1L);
-        Long id = service.view(1L).memories().get(0).id();
-        // Simulates a remote model response arriving after deletion committed.
-        service.delete(1L, id);
-        service.apply(running, List.of(fact("UPDATE", "diet.preference", "重口味", true)));
-        AtomicBoolean historySaved = new AtomicBoolean();
-        service.completeTurn(running, "重口味", () -> historySaved.set(true));
-        assertFalse(historySaved.get()); assertTrue(service.view(1L).memories().isEmpty());
-        verify(recent).clearStrict(1L);
+    @Test void redisFailureRollsBackForgetInsteadOfPretendingSuccess() throws Exception {
+        var f=new CognitiveMemoryFixture();f.remember("ADD","diet.preference","清淡",false);
+        doThrow(new IllegalStateException()).when(f.recent).clearStrict(1L);
+        assertThrows(IllegalStateException.class,()->f.service.clear(1L));assertNotNull(f.repository.fact(1L,"diet.preference"));
     }
-
-    @Test void queuedJobsAreInvalidatedEvenAfterDisableThenReenable() {
-        var turn = service.beginTurn(1L);
-        service.completeTurn(turn, "清淡", () -> {});
-        service.setEnabled(1L, false);
-        service.setEnabled(1L, true);
-        jobs.removeFirst().run();
-        verifyNoInteractions(ai);
-        assertTrue(service.view(1L).memories().isEmpty());
+    @Test void temporaryEventsExpireAsCurrentFactsButCanBeRecalledAsHistory() throws Exception {
+        var f=new CognitiveMemoryFixture();
+        var candidate=new MemoryExtraction.Candidate("ADD","health","health.symptom.headache","今天头疼","今天头疼","temporary",1,false,"self","asserted");
+        f.output(candidate);var turn=f.service.beginTurn(1L,"头疼");f.service.completeTurn(turn,"今天头疼",()->{});f.drain();
+        f.jdbc.update("UPDATE user_memory SET expires_at=?",LocalDateTime.now().minusDays(1));
+        f.jdbc.update("UPDATE memory_episode SET expires_at=?",LocalDateTime.now().minusDays(1));
+        assertFalse(f.service.context(f.service.beginTurn(1L,"头疼")).contains("头疼"));
+        assertTrue(f.service.context(f.service.beginTurn(1L,"以前头疼过吗")).contains("头疼"));
     }
-
-    @Test void disabledMemoryIsNeitherInjectedNorExtractedButRecentConversationStillWorks() throws Exception {
-        extract(service.beginTurn(1L), "清淡", fact("ADD", "diet.preference", "清淡", false));
-        service.setEnabled(1L, false);
-        var disabled = service.beginTurn(1L);
-        AtomicBoolean saved = new AtomicBoolean();
-        service.completeTurn(disabled, "你好", () -> saved.set(true));
-        assertTrue(saved.get()); assertTrue(jobs.isEmpty());
-        assertFalse(service.context(disabled).contains("清淡"));
-        assertEquals(1, service.view(1L).memories().size());
+    @Test void deletingSourceRetractsDependentVersionsAndReplaysRemainingEvidence() throws Exception {
+        var f=new CognitiveMemoryFixture();f.remember("ADD","diet.preference","清淡",false);f.remember("NOOP","diet.preference","清淡",false);
+        var episodes=f.repository.episodes(1L,10,true);Long old=f.id("diet.preference");
+        f.service.deleteEpisode(1L,episodes.get(0).id());assertNull(f.repository.semantic(1L,old));
+        f.drain();assertNotNull(f.repository.fact(1L,"diet.preference"));
+        assertEquals(1,f.service.evidence(1L,f.id("diet.preference")).size());
     }
-
-    @Test void editsAndClearAreOwnerScopedAndInvalidateOldJobs() throws Exception {
-        extract(service.beginTurn(1L), "清淡", fact("ADD", "diet.preference", "清淡", false));
-        Long id = service.view(1L).memories().get(0).id();
-        assertThrows(BusinessException.class, () -> service.delete(2L, id));
-        assertThrows(BusinessException.class, () -> service.edit(2L, id, "伪造"));
-        service.clear(2L); assertEquals(1, service.view(1L).memories().size());
-        var stale = service.beginTurn(1L);
-        service.edit(1L, id, "素食");
-        service.apply(stale, List.of(fact("UPDATE", "diet.preference", "重口味", true)));
-        assertEquals("素食", service.view(1L).memories().get(0).content());
-        service.clear(1L);
-        service.apply(stale, List.of(fact("ADD", "diet.preference", "清淡", false)));
-        assertTrue(service.view(1L).memories().isEmpty());
+    @Test void explicitNaturalForgetDeletesSourceGraph() throws Exception {
+        var f=new CognitiveMemoryFixture();f.remember("ADD","diet.preference","清淡",false);
+        f.output(new MemoryExtraction.Candidate("DELETE","diet","diet.preference",null,"忘掉我的饮食偏好",null,null,true,"self","asserted"));
+        var turn=f.service.beginTurn(1L,"忘掉我的饮食偏好");f.service.completeTurn(turn,"忘掉我的饮食偏好",()->{});f.drain();
+        assertNull(f.repository.fact(1L,"diet.preference"));assertTrue(f.repository.episodes(1L,10,true).isEmpty());
     }
-
-    @Test void redisFailureRollsBackForgetRatherThanReportingFalseSuccess() throws Exception {
-        extract(service.beginTurn(1L), "清淡", fact("ADD", "diet.preference", "清淡", false));
-        doThrow(new IllegalStateException("offline")).when(recent).clearStrict(1L);
-        assertThrows(IllegalStateException.class, () -> service.clear(1L));
-        assertEquals(1, service.view(1L).memories().size());
-    }
-
-    @Test void expiredFactsAreNotUsedAndTemporaryFactsGetExpiry() {
-        var temporary = new MemoryExtraction.Candidate("ADD", "health", "health.symptom.headache", "今天头疼", "今天头疼",
-                "temporary", 1, false, "self", "asserted");
-        service.apply(service.beginTurn(1L), List.of(temporary));
-        assertNotNull(service.view(1L).memories().get(0).expiresAt());
-        jdbc.update("UPDATE user_memory SET expires_at=?", LocalDateTime.now().minusDays(1));
-        assertTrue(service.view(1L).memories().isEmpty());
-        assertFalse(service.context(service.beginTurn(1L)).contains("头疼"));
-    }
-
-    @Test void boundedMemoryDoesNotEvictImportantFactsToFitNewOnes() {
-        var turn = service.beginTurn(1L);
-        for (int i=0; i<50; i++) repository.insert(1L, "diet.item_"+i, "diet", "旧事实"+i, "原文", turn.turn(), null);
-        service.apply(service.beginTurn(1L), List.of(fact("ADD", "exercise.habit", "游泳", false)));
-        assertEquals(50, service.view(1L).memories().size());
-    }
-
-    @Test void malformedModelOutputOrExecutorOverloadCannotFailChat() {
-        when(ai.complete(any())).thenReturn("not json");
-        service.completeTurn(service.beginTurn(1L), "你好", () -> {});
-        assertDoesNotThrow(() -> jobs.removeFirst().run());
-        assertTrue(service.view(1L).memories().isEmpty());
-        var saturated = new LongTermMemoryService(repository, transactions, ai, new MemoryExtraction(json), json,
-                command -> { throw new RejectedExecutionException(); }, recent);
-        assertDoesNotThrow(() -> saturated.completeTurn(saturated.beginTurn(1L), "你好", () -> {}));
-    }
-
-    @Test void explicitNaturalLanguageForgetClearsBothStores() throws Exception {
-        extract(service.beginTurn(1L), "清淡", fact("ADD", "diet.preference", "清淡", false));
-        var deletion = new MemoryExtraction.Candidate("DELETE", "diet", "diet.preference", null, "忘掉我的饮食偏好",
-                null, null, true, "self", "asserted");
-        extract(service.beginTurn(1L), "请忘掉我的饮食偏好", deletion);
-        assertTrue(service.view(1L).memories().isEmpty());
-        verify(recent).clearStrict(1L);
-    }
-
-    @Test void databaseLockOrdersDeletionAfterAnInFlightHistoryWrite() throws Exception {
-        var snapshot=service.beginTurn(1L);
-        var entered=new CountDownLatch(1);
-        var release=new CountDownLatch(1);
-        var cleared=new AtomicBoolean();
-        var workers=Executors.newFixedThreadPool(2);
-        doAnswer(inv -> { cleared.set(true); return null; }).when(recent).clearStrict(1L);
+    @Test void databaseLockOrdersForgetAfterInFlightHistoryWrite() throws Exception {
+        var f=new CognitiveMemoryFixture();var snapshot=f.service.beginTurn(1L,"清淡");
+        var entered=new CountDownLatch(1);var release=new CountDownLatch(1);var cleared=new AtomicBoolean();var workers=Executors.newFixedThreadPool(2);
+        doAnswer(inv->{cleared.set(true);return null;}).when(f.recent).clearStrict(1L);
         try {
-            var completion=workers.submit(() -> service.completeTurn(snapshot,"清淡",() -> {
-                entered.countDown();
-                try { assertTrue(release.await(5,TimeUnit.SECONDS)); }
-                catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(e); }
-                assertFalse(cleared.get(),"Deletion cannot clear Redis before the locked reply write finishes");
+            var completion=workers.submit(()->f.service.completeTurn(snapshot,"清淡",()->{
+                entered.countDown();try { assertTrue(release.await(5,TimeUnit.SECONDS)); } catch(InterruptedException e) { throw new IllegalStateException(e); }
+                assertFalse(cleared.get());
             }));
-            assertTrue(entered.await(5,TimeUnit.SECONDS));
-            var deletion=workers.submit(() -> service.clear(1L));
-            release.countDown();
-            completion.get(5,TimeUnit.SECONDS); deletion.get(5,TimeUnit.SECONDS);
-            assertTrue(cleared.get());
-            jobs.removeFirst().run();
-            verifyNoInteractions(ai);
-        } finally { release.countDown(); workers.shutdownNow(); }
+            assertTrue(entered.await(5,TimeUnit.SECONDS));var deletion=workers.submit(()->f.service.clear(1L));release.countDown();
+            completion.get(5,TimeUnit.SECONDS);deletion.get(5,TimeUnit.SECONDS);f.drain();verifyNoInteractions(f.ai);assertTrue(cleared.get());
+        } finally { release.countDown();workers.shutdownNow(); }
     }
 }

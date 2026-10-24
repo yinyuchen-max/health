@@ -14,7 +14,13 @@ public class MemoryExtraction {
     private static final Set<String> CATEGORIES = Set.of("health", "diet", "exercise", "goal", "lifestyle", "family");
     private static final Set<String> OPERATIONS = Set.of("ADD", "UPDATE", "NOOP", "CONFLICT", "DELETE");
     public record Candidate(String operation, String category, String factKey, String content, String evidence,
-                            String temporalType, Integer ttlDays, boolean explicitChange, String subject, String assertion) {}
+                            String temporalType, Integer ttlDays, boolean explicitChange, String subject, String assertion,
+                            Double importance,List<String> entities,String goal,String occurredAt,String timeEvidence) {
+        public Candidate(String operation,String category,String factKey,String content,String evidence,String temporalType,
+                         Integer ttlDays,boolean explicitChange,String subject,String assertion) {
+            this(operation,category,factKey,content,evidence,temporalType,ttlDays,explicitChange,subject,assertion,null,List.of(),null,null,null);
+        }
+    }
     public record Result(List<Candidate> candidates) {}
 
     public MemoryExtraction(ObjectMapper json) {
@@ -39,8 +45,14 @@ public class MemoryExtraction {
                 || c.factKey().length() > 100 || !c.factKey().startsWith(c.category()+".")
                 || c.evidence() == null || c.evidence().isBlank() || c.evidence().length() > 1000
                 || !message.contains(c.evidence())) return false;
+        if(c.importance()!=null&&(!Double.isFinite(c.importance())||c.importance()<0||c.importance()>1)) return false;
+        if(c.entities()!=null&&(c.entities().size()>8||c.entities().stream().anyMatch(s->s==null||s.isBlank()||s.length()>64||!message.contains(s)))) return false;
+        if(c.goal()!=null&&(c.goal().length()>500||!message.contains(c.goal()))) return false;
+        if(c.occurredAt()!=null&&(c.occurredAt().length()>32||c.timeEvidence()==null||c.timeEvidence().isBlank()
+                ||c.timeEvidence().length()>200||!message.contains(c.timeEvidence()))) return false;
         if ("DELETE".equals(c.operation())) return c.explicitChange()
                 && c.evidence().matches("(?is).*(忘|删除|清除|不要记|别记|forget|delete|remove).*");
+        if(c.evidence().matches("(?is).*(是不是|是否|假如|假设|如果|也许|听说|\\?).*")) return false;
         return c.content() != null && !c.content().isBlank() && c.content().length() <= 500
                 && "asserted".equals(c.assertion())
                 && ("family".equals(c.category()) ? "family".equals(c.subject()) : "self".equals(c.subject()))

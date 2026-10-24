@@ -17,7 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.ScheduledFuture;
 
 @RestController
 @RequestMapping("/api/chat")
@@ -27,6 +31,9 @@ public class ChatController {
 
     /** SSE 流式响应超时时间（毫秒） */
     private static final long SSE_TIMEOUT_MS = 120_000L;
+    private final ScheduledExecutorService heartbeats=Executors.newSingleThreadScheduledExecutor(r->{
+        var t=new Thread(r,"health-chat-heartbeat");t.setDaemon(true);return t;
+    });
 
     private final ChatService chatService;
     private final SecurityUtil securityUtil;
@@ -58,14 +65,16 @@ public class ChatController {
         Long currentUserId = securityUtil.getCurrentUserId();
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
         AtomicBoolean finished = new AtomicBoolean(false);
+        var heartbeat=new AtomicReference<ScheduledFuture<?>>();
+        Runnable stopHeartbeat=()->{var task=heartbeat.get();if(task!=null) task.cancel(false);};
 
         emitter.onTimeout(() -> {
             if (finished.compareAndSet(false, true)) {
-                emitter.complete();
+                stopHeartbeat.run();emitter.complete();
             }
         });
-        emitter.onError(e -> finished.set(true));
-        emitter.onCompletion(() -> finished.set(true));
+        emitter.onError(e -> { finished.set(true);stopHeartbeat.run(); });
+        emitter.onCompletion(() -> { finished.set(true);stopHeartbeat.run(); });
 
         chatService.chatStream(request.getMessage(), currentUserId, new ChatService.StreamCallback() {
 
@@ -79,6 +88,7 @@ public class ChatController {
                 } catch (Exception e) {
                     log.debug("SSE 发送失败（客户端可能已断开）: {}", e.getMessage());
                     if (finished.compareAndSet(false, true)) {
+                        stopHeartbeat.run();
                         emitter.completeWithError(e);
                     }
                 }
@@ -98,7 +108,7 @@ public class ChatController {
             public void onComplete(String fullText) {
                 sendEvent("done", fullText);
                 if (finished.compareAndSet(false, true)) {
-                    emitter.complete();
+                    stopHeartbeat.run();emitter.complete();
                 }
             }
 
@@ -106,12 +116,22 @@ public class ChatController {
             public void onError(Throwable error) {
                 sendEvent("error", error.getMessage() == null ? "AI 服务出错" : error.getMessage());
                 if (finished.compareAndSet(false, true)) {
-                    emitter.complete();
+                    stopHeartbeat.run();emitter.complete();
                 }
             }
         });
+        // Start only after synchronous entitlement checks pass. Comments carry no UI events.
+        if(!finished.get()) {
+            heartbeat.set(heartbeats.scheduleAtFixedRate(()->{
+                if(finished.get()) return;
+                try { emitter.send(SseEmitter.event().comment("keepalive")); }
+                catch(Exception e) { if(finished.compareAndSet(false,true)) { stopHeartbeat.run();emitter.completeWithError(e); } }
+            },1,10,TimeUnit.SECONDS));
+            if(finished.get()) stopHeartbeat.run();
+        }
         return emitter;
     }
+    @jakarta.annotation.PreDestroy public void close() { heartbeats.shutdownNow(); }
 
     private static String toJson(String text) {
         // 手写最小 JSON 字符串转义（只针对 token/完整回复中的控制字符）

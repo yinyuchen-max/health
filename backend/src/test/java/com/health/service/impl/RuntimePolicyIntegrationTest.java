@@ -19,18 +19,24 @@ import static org.mockito.Mockito.*;
 
 class RuntimePolicyIntegrationTest {
     @Test
-    void redisMemoryKeepsConfiguredWindowAndTtl() {
+    void redisMemoryAtomicallySavesWholeContextAndTtlWithoutMessageCountTruncation() {
         RuntimeSettings settings = new RuntimeSettings();
         settings.getChatMemory().setMaxMessages(2);
         settings.getChatMemory().setTtl(Duration.ofHours(2));
         RedisTemplate<String, Object> redis = mock(RedisTemplate.class);
-        ListOperations<String, Object> lists = mock(ListOperations.class);
-        when(redis.opsForList()).thenReturn(lists);
+        when(redis.execute(any(org.springframework.data.redis.core.script.RedisScript.class),anyList(),any(Object[].class)))
+                .thenAnswer(inv -> {
+                    assertEquals(List.of("chat:memory:1"),inv.getArgument(1));
+                    assertEquals(Duration.ofHours(2).toMillis(),inv.<Long>getArgument(2).longValue());
+                    assertTrue(inv.getArgument(3).toString().contains("old"));
+                    assertTrue(inv.getArgument(4).toString().contains("recent"));
+                    assertTrue(inv.getArgument(5).toString().contains("latest"));
+                    return 1L;
+                });
         new RedisChatMemoryStore(redis, settings).updateMessages(1L,
                 List.of(UserMessage.from("old"), UserMessage.from("recent"), UserMessage.from("latest")));
-        verify(lists, times(2)).rightPush(eq("chat:memory:1"), any());
-        verify(lists, never()).rightPush(anyString(), argThat(value -> value.toString().contains("old")));
-        verify(redis).expire("chat:memory:1", Duration.ofHours(2));
+        verify(redis).execute(any(org.springframework.data.redis.core.script.RedisScript.class),anyList(),any(Object[].class));
+        verify(redis,never()).delete(anyString());
     }
 
 }

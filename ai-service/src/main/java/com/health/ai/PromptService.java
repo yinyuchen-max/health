@@ -28,7 +28,10 @@ public class PromptService {
                     "sportRecords", "retrievedKnowledge", "historyRecords"),
             "appointment-extract-system", Set.of("currentDate", "context", "departments"),
             "memory-context", Set.of("longTermMemories"),
-            "memory-extract-system", Set.of("existingMemories"));
+            "memory-extract-system", Set.of("existingMemories","currentDate"),
+            "chat-compaction-system", Set.of(),
+            "chat-checkpoint-context", Set.of("checkpoint"),
+            "chat-archive-context", Set.of("archiveEvidence"));
 
     private final Map<String, String> templates;
 

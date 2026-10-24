@@ -20,6 +20,14 @@ public class AiController {
         this.auth=auth; this.json=json; this.engine=engine; slots=new Semaphore(Math.max(1,concurrent));
     }
     @GetMapping("/health") public Map<String,String> health() { return Map.of("status","UP"); }
+    @PostMapping("/internal/ai/context")
+    public ChatContextCompressor.Context context(@RequestHeader(value="Authorization",required=false) String token,@RequestBody String body) throws Exception {
+        AiRequest r=read(token,body,"context");
+        if (!slots.tryAcquire()) throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS);
+        try { return engine.context(r); }
+        catch(IllegalArgumentException e) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"聊天上下文无效"); }
+        finally { slots.release(); }
+    }
     @PostMapping("/internal/ai/complete")
     public Map<String,String> complete(@RequestHeader(value="Authorization",required=false) String token,@RequestBody String body) throws Exception {
         AiRequest r=read(token,body,"complete");
@@ -71,14 +79,14 @@ public class AiController {
         return emitter;
     }
     private AiRequest read(String token,String body,String operation) throws Exception {
-        if(body.length()>1_000_000) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE);
+        if(body.length()>16_000_000) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE);
         String userId=auth.verify(token,body,operation);
         AiRequest r;
         try { r=json.readValue(body,AiRequest.class); }
         catch(Exception e) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST); }
         if(r.userId()==null || !userId.equals(r.userId().toString()) || r.apiKey()==null || r.apiKey().length()>512
                 || r.apiKey().isBlank() || r.embeddingApiKey()!=null && r.embeddingApiKey().length()>512 || r.model()==null || !r.model().matches("[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,99}")
-                || r.variables()==null || r.history()!=null && r.history().size()>100)
+                || r.variables()==null || r.history()!=null && r.history().size()>100_000)
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
         return r;
     }

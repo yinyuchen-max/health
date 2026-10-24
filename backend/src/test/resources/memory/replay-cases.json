@@ -1,0 +1,10 @@
+[
+  {"id":"long-gap-diet","query":"吃饭怎么安排","targets":["diet.preference"],"facts":[{"key":"diet.preference","category":"diet","content":"偏好清淡饮食","importance":0.7,"ageDays":180,"entities":["diet"]}]},
+  {"id":"exercise-and-symptom","query":"膝关节不舒服时怎么锻炼","targets":["health.knee","exercise.habit"],"facts":[{"key":"health.knee","category":"health","content":"跑步后膝盖不舒服","importance":0.85,"ageDays":5,"entities":["knee"]},{"key":"exercise.habit","category":"exercise","content":"偏好游泳作为运动","importance":0.7,"ageDays":3,"entities":["exercise","knee"]}]},
+  {"id":"weight-goal","query":"我的减重目标是什么","targets":["goal.target_weight"],"facts":[{"key":"goal.target_weight","category":"goal","content":"体重目标为60公斤","importance":0.85,"ageDays":30,"entities":["goal","weight"]}]},
+  {"id":"family-subject","query":"家里有人血压高吗","targets":["family.hypertension"],"facts":[{"key":"family.hypertension","category":"family","content":"用户自述母亲有高血压家族史","importance":0.85,"ageDays":100,"entities":["pressure"]}]},
+  {"id":"past-headache","query":"我之前头疼是哪天","targets":["health.headache_event"],"facts":[{"key":"health.headache_event","category":"health","content":"2026年10月12日头疼","importance":0.65,"ageDays":6,"entities":[]}]},
+  {"id":"critical-allergy","query":"花生可以吃吗","targets":["health.allergy.peanut"],"facts":[{"key":"health.allergy.peanut","category":"health","content":"用户自述对花生过敏","importance":1,"ageDays":360,"entities":["peanut"]}]},
+  {"id":"sleep","query":"怎么改善睡眠","targets":["lifestyle.sleep"],"facts":[{"key":"lifestyle.sleep","category":"lifestyle","content":"用户最近睡眠不足","importance":0.65,"ageDays":3,"entities":["sleep"]}]},
+  {"id":"association","query":"膝盖不舒服","targets":["health.knee","exercise.habit"],"facts":[{"key":"health.knee","category":"health","content":"膝盖不舒服","importance":0.85,"ageDays":5,"entities":["knee"]},{"key":"exercise.habit","category":"exercise","content":"偏好低冲击活动","importance":0.7,"ageDays":3,"entities":["knee"]}]}
+]

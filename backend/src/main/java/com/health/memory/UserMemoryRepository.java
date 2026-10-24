@@ -41,7 +41,7 @@ public class UserMemoryRepository {
         jdbc.update("UPDATE user_memory_settings SET enabled=?,revision=revision+1 WHERE user_id=?", enabled, userId);
     }
     public List<Memory> list(Long userId, LocalDateTime now) {
-        return jdbc.query("SELECT * FROM user_memory WHERE user_id=? AND (expires_at IS NULL OR expires_at>?) ORDER BY updated_at DESC,id DESC",
+        return jdbc.query("SELECT * FROM user_memory WHERE user_id=? AND status IN ('ACTIVE','CONFLICT') AND (expires_at IS NULL OR expires_at>?) ORDER BY updated_at DESC,id DESC",
                 ROW, userId, Timestamp.valueOf(now));
     }
     public Memory find(Long userId, Long id) {

@@ -11,6 +11,21 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 class AiControllerTest {
+    @Test void contextPreflightVerifiesOperationAndSubjectAndReturnsOnlyInternalMetadata() throws Exception {
+        var auth=mock(InternalAuthorization.class);var engine=mock(AiEngine.class);var json=new ObjectMapper();
+        when(auth.verify(any(),anyString(),eq("context"))).thenReturn("1");
+        var mvc=MockMvcBuilders.standaloneSetup(new AiController(auth,json,engine,1)).build();
+        var invocation=new AiRequest(1L,"deepseek","sk-secret","test","chat",null,Map.of(),List.of(),"hi");
+        when(engine.context(any())).thenReturn(new ChatContextCompressor.Context(List.of(),true,false,9000,2500,10000));
+        String response=mvc.perform(post("/internal/ai/context").contentType("application/json").content(json.writeValueAsString(invocation)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.compressed").value(true))
+                .andExpect(jsonPath("$.afterTokens").value(2500)).andReturn().getResponse().getContentAsString();
+        assertFalse(response.contains("sk-secret"));
+        invocation=new AiRequest(2L,"deepseek","sk-secret","test","chat",null,Map.of(),List.of(),"hi");
+        mvc.perform(post("/internal/ai/context").contentType("application/json").content(json.writeValueAsString(invocation)))
+                .andExpect(status().isBadRequest());
+        verify(engine,times(1)).context(any());
+    }
     @Test void verifiesSubjectAndSanitizesProviderErrors() throws Exception {
         var auth=mock(InternalAuthorization.class); var engine=mock(AiEngine.class); var json=new ObjectMapper();
         when(auth.verify(any(),anyString(),eq("complete"))).thenReturn("1");

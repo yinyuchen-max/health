@@ -6,8 +6,8 @@ import com.health.domain.vo.SportRecordVO;
 import com.health.service.*;
 import com.health.common.config.RuntimeSettings;
 import com.health.memory.LongTermMemoryService;
-import dev.langchain4j.data.message.*;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
+import com.health.memory.ChatContextService;
+import java.util.concurrent.*;
 import org.springframework.stereotype.Service;
 import java.util.*;
 
@@ -17,14 +17,16 @@ public class ChatServiceImpl implements ChatService {
     private final AppointmentConversationService appointments;
     private final HealthRecordService healthRecordService;
     private final SportRecordService sportRecordService;
-    private final RedisChatMemoryStore memoryStore;
+    private final ChatContextService contexts;
+    private final ExecutorService streamPreparation=new ThreadPoolExecutor(8,8,60,TimeUnit.SECONDS,new ArrayBlockingQueue<>(16),
+            r->{var t=new Thread(r,"health-chat-context");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
     private final RuntimeSettings settings;
     private final LongTermMemoryService longTermMemory;
     public ChatServiceImpl(AiClient ai, AppointmentConversationService appointments,
                            HealthRecordService healthRecordService, SportRecordService sportRecordService,
-                           RedisChatMemoryStore memoryStore, RuntimeSettings settings, LongTermMemoryService longTermMemory) {
+                           ChatContextService contexts, RuntimeSettings settings, LongTermMemoryService longTermMemory) {
         this.ai=ai; this.appointments=appointments; this.healthRecordService=healthRecordService;
-        this.sportRecordService=sportRecordService; this.memoryStore=memoryStore; this.settings=settings;
+        this.sportRecordService=sportRecordService; this.contexts=contexts; this.settings=settings;
         this.longTermMemory=longTermMemory;
     }
     @Override public ChatResponseDTO chat(String message,Long userId) {
@@ -35,10 +37,11 @@ public class ChatServiceImpl implements ChatService {
         String appointment=appointments.handleMessage(message,userId);
         if(appointment!=null) { result.setReply(appointment); return result; }
         try {
-            var snapshot=longTermMemory.beginTurn(userId);
-            var memory=memory(userId);
-            String reply=ai.complete(invocation(message,userId,memory,snapshot));
-            longTermMemory.completeTurn(snapshot,message,()-> saveTurn(userId,message,reply));
+            var snapshot=longTermMemory.beginTurn(userId,message);
+            var turn=invocation(message,userId,snapshot);
+            String reply=ai.complete(turn.request());
+            contexts.complete(turn,reply);
+            longTermMemory.completeTurn(snapshot,message,()->{});
             result.setReply(reply);
         } catch(AiServiceException e) { result.setReply(e.getMessage()); }
         catch(Exception e) { result.setReply("AI 服务暂时不可用，请稍后重试"); }
@@ -50,14 +53,19 @@ public class ChatServiceImpl implements ChatService {
         if(message==null || message.isBlank()) { callback.onComplete("请告诉我您想咨询的健康问题。"); return; }
         String appointment=appointments.handleMessage(message,userId);
         if(appointment!=null) { callback.onToken(appointment); callback.onComplete(appointment); return; }
+        try { streamPreparation.execute(()->streamReply(message,userId,callback)); }
+        catch(RejectedExecutionException e) { callback.onError(new AiServiceException("AI 请求较多，请稍后重试")); }
+    }
+    private void streamReply(String message,Long userId,StreamCallback callback) {
         try {
-            var snapshot=longTermMemory.beginTurn(userId);
-            var memory=memory(userId);
-            ai.stream(invocation(message,userId,memory,snapshot),new StreamCallback() {
+            var snapshot=longTermMemory.beginTurn(userId,message);
+            var turn=invocation(message,userId,snapshot);
+            ai.stream(turn.request(),new StreamCallback() {
                 public void onThinking(String token) { callback.onThinking(token); }
                 public void onToken(String token) { callback.onToken(token); }
                 public void onComplete(String reply) {
-                    longTermMemory.completeTurn(snapshot,message,()-> saveTurn(userId,message,reply));
+                    contexts.complete(turn,reply);
+                    longTermMemory.completeTurn(snapshot,message,()->{});
                     callback.onComplete(reply);
                 }
                 public void onError(Throwable error) { callback.onError(error); }
@@ -65,25 +73,12 @@ public class ChatServiceImpl implements ChatService {
         } catch(AiServiceException e) { callback.onError(e); }
         catch(Exception e) { callback.onError(new AiServiceException("AI 服务暂时不可用，请稍后重试")); }
     }
-    private MessageWindowChatMemory memory(Long userId) {
-        return MessageWindowChatMemory.builder().chatMemoryStore(memoryStore).id(userId)
-                .maxMessages(settings.getChatMemory().getMaxMessages()).build();
-    }
-    private void saveTurn(Long userId,String message,String reply) {
-        // Reload inside the per-user lock rather than overwriting newer replies with the request's old snapshot.
-        var latest=memory(userId);
-        latest.add(UserMessage.from(message)); latest.add(AiMessage.from(reply));
-    }
-    private AiRequest invocation(String message,Long userId,MessageWindowChatMemory memory,LongTermMemoryService.Snapshot snapshot) {
-        List<AiRequest.Message> history=new ArrayList<>();
-        for(var m:memory.messages()) {
-            if(m instanceof UserMessage user) history.add(new AiRequest.Message("user",user.singleText()));
-            else if(m instanceof AiMessage reply) history.add(new AiRequest.Message("assistant",reply.text()));
-        }
+    private ChatContextService.Turn invocation(String message,Long userId,LongTermMemoryService.Snapshot snapshot) {
         var variables=new HashMap<>(context(userId));
         variables.put("longTermMemories",longTermMemory.context(snapshot));
-        return ai.prepare(userId,"chat",variables,history,message);
+        return contexts.prepare(userId,message,snapshot,variables);
     }
+    @jakarta.annotation.PreDestroy public void close() { streamPreparation.shutdownNow(); }
     private Map<String,String> context(Long userId) {
         StringBuilder healthText = new StringBuilder();
         StringBuilder sportText = new StringBuilder();

@@ -7,6 +7,7 @@ import com.health.service.*;
 import com.health.common.utils.SecurityUtil;
 import com.health.common.config.RuntimeSettings;
 import com.health.memory.LongTermMemoryService;
+import com.health.memory.ChatContextService;
 import org.springframework.core.io.ClassPathResource;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -21,12 +22,15 @@ class PromptIntegrationTest {
         when(health.getHealthRecordsByUserId(1L,1,5)).thenReturn(Map.of("records",List.of(record)));
         when(sports.getSportRecordsByUserId(1L,1,5)).thenReturn(Map.of("records",List.of()));
         when(ai.complete(any())).thenReturn("健康建议");
+        var contexts=mock(ChatContextService.class);
+        when(contexts.prepare(anyLong(),anyString(),any(),anyMap())).thenAnswer(inv->new ChatContextService.Turn(
+                new AiRequest(inv.getArgument(0),"deepseek","key","test","chat",null,inv.getArgument(3),List.of(),inv.getArgument(1)),"turn",0));
         var memories=mock(LongTermMemoryService.class);
         when(memories.context(any())).thenReturn("暂无长期记忆");
-        var chat=new ChatServiceImpl(ai,mock(AppointmentConversationService.class),health,sports,mock(RedisChatMemoryStore.class),new RuntimeSettings(),memories);
+        var chat=new ChatServiceImpl(ai,mock(AppointmentConversationService.class),health,sports,contexts,new RuntimeSettings(),memories);
         assertEquals("健康建议",chat.chat("你好",1L).getReply());
         ArgumentCaptor<Map<String,String>> context=ArgumentCaptor.forClass(Map.class);
-        verify(ai).prepare(eq(1L),eq("chat"),context.capture(),anyList(),eq("你好"));
+        verify(contexts).prepare(eq(1L),eq("你好"),any(),context.capture());
         assertTrue(context.getValue().get("healthRecords").contains("心率: 75"));
         assertThrows(NullPointerException.class,()->chat.chat("你好",null));
     }

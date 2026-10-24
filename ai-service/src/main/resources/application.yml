@@ -20,6 +20,12 @@ ai:
   service-secret: ${AI_SERVICE_SECRET}
   timeout-seconds: ${AI_MODEL_TIMEOUT_SECONDS:60}
   max-concurrent: ${AI_MAX_CONCURRENT:8}
+  context:
+    window-tokens: ${AI_CONTEXT_WINDOW_TOKENS:0}
+    output-tokens: ${AI_CONTEXT_OUTPUT_TOKENS:8192}
+    recent-messages: ${AI_CONTEXT_RECENT_MESSAGES:8}
+    summary-model: ${AI_CONTEXT_SUMMARY_MODEL:}
+    summary-timeout-seconds: ${AI_CONTEXT_SUMMARY_TIMEOUT_SECONDS:25}
   prompts:
     directory: ${AI_PROMPTS_DIRECTORY:./prompts}
   knowledge:

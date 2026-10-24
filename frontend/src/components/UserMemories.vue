@@ -31,7 +31,8 @@
         <el-button size="small" type="danger" text :disabled="busy" @click="remove(memory)">删除</el-button>
       </div>
     </article>
-    <p class="hint">最多保留 50 条有效记忆。健康信息属于你的自述，不代表医学诊断。记忆提取可能出错，请在这里纠正。删除后若在新消息中再次提及，可能重新记住。</p>
+    <p class="hint">健康信息属于你的自述，不代表医学诊断。经历会逐步巩固为知识，不常用的信息可能归档。记忆提取可能出错，请在这里纠正；删除后若在新消息中再次提及，可能重新记住。</p>
+    <CognitiveMemoryPanel :refresh-key="refreshKey" @changed="load" />
     <el-dialog v-model="editing" title="修改并确认记忆" width="min(520px, 92vw)" :close-on-click-modal="!busy" :close-on-press-escape="!busy" :show-close="!busy">
       <el-input v-model="draft" type="textarea" :rows="4" maxlength="500" show-word-limit :disabled="busy" />
       <template #footer>
@@ -46,6 +47,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../utils/request'
+import CognitiveMemoryPanel from './CognitiveMemoryPanel.vue'
 
 const enabled = ref(false)
 const loaded = ref(false)
@@ -55,6 +57,7 @@ const memories = ref([])
 const editing = ref(false)
 const editingId = ref(null)
 const draft = ref('')
+const refreshKey = ref(0)
 const categories = { health: '健康情况', diet: '饮食偏好', exercise: '运动习惯', goal: '个人目标', lifestyle: '生活习惯', family: '家族病史' }
 const formatDate = value => String(value || '').replace('T', ' ').slice(0, 16)
 const check = result => {
@@ -68,6 +71,7 @@ const load = async () => {
     enabled.value = data.enabled
     memories.value = data.memories
     loaded.value = true
+    refreshKey.value++
   } catch (e) { ElMessage.error(e.message || '读取记忆失败') }
   finally { loading.value = false }
 }
