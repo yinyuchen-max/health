@@ -8,6 +8,9 @@ import com.health.domain.dto.WechatLoginResponseDTO;
 import com.health.domain.entity.User;
 import com.health.domain.vo.UserVO;
 import com.health.mapper.UserMapper;
+import com.health.common.security.TokenDigests;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,7 +52,9 @@ public class WechatAuthService {
     public WechatAuthService(UserMapper userMapper, AuthSessionService authSessions, ObjectMapper objectMapper, StringRedisTemplate redisTemplate) {
         this.userMapper = userMapper;
         this.authSessions = authSessions;
-        this.restTemplate = new RestTemplate();
+        var factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(5000); factory.setReadTimeout(10000);
+        this.restTemplate = new RestTemplate(factory);
         this.objectMapper = objectMapper;
         this.redisTemplate = redisTemplate;
     }
@@ -89,6 +94,8 @@ public class WechatAuthService {
         UserVO userVO = new UserVO();
         userVO.setId(user.getId());
         userVO.setUsername(user.getUsername());
+        userVO.setNickname(user.getNickname());
+        userVO.setWechatBound(true);
         userVO.setEmail(user.getEmail());
         userVO.setPhone(user.getPhone());
         userVO.setRole(user.getRole());
@@ -106,16 +113,13 @@ public class WechatAuthService {
      * 调用微信 code2Session 接口
      */
     private String code2Session(String code) {
+        if (appId == null || appId.isBlank() || "--".equals(appId) || appSecret == null || appSecret.isBlank())
+            throw new BusinessException("微信登录尚未配置，请联系管理员");
         log.debug("请求微信登录身份验证");
         
-        String url = CODE2SESSION_URL
-                .replace("{appid}", appId)
-                .replace("{secret}", appSecret)
-                .replace("{code}", code);
-
         try {
             // 微信 API 返回 text/plain，先用 String 接收再解析
-            String responseStr = restTemplate.getForObject(url, String.class);
+            String responseStr = restTemplate.getForObject(CODE2SESSION_URL, String.class, appId, appSecret, code);
 
             
             if (responseStr == null || responseStr.isBlank()) {
@@ -159,8 +163,7 @@ public class WechatAuthService {
      */
     private User createWechatUser(String openid) {
         User user = new User();
-        // 使用 openid 前 8 位作为默认用户名，避免重复
-        user.setUsername("wx_" + openid.substring(0, Math.min(8, openid.length())));
+        user.setUsername("wx_" + TokenDigests.sha256(openid).substring(0, 32));
         user.setPassword(""); // 微信用户无密码
         user.setWechatOpenid(openid);
         user.setRole("user");
@@ -169,9 +172,22 @@ public class WechatAuthService {
         user.setUpdateTime(LocalDateTime.now());
         user.setDeleted(0);
 
-        userMapper.insert(user);
-        log.info("创建微信用户成功：openid={}, username={}", openid, user.getUsername());
+        try { userMapper.insert(user); }
+        catch (DuplicateKeyException e) {
+            // 首次扫码和普通小程序登录并发时复用已创建的同一个账号。
+            User existing = userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getWechatOpenid, openid));
+            if (existing == null) throw e;
+            return existing;
+        }
+        log.info("创建微信用户成功：userId={}", user.getId());
         return user;
+    }
+
+    public void refreshSession(Long userId, String code) {
+        User user = userMapper.selectById(userId);
+        String openid = code2Session(code);
+        if (user == null || !openid.equals(user.getWechatOpenid()))
+            throw new BusinessException("当前账号与微信身份不一致，请使用微信重新登录后同步");
     }
 
     /**
@@ -198,10 +214,16 @@ public class WechatAuthService {
 
             @SuppressWarnings("unchecked")
             Map<String, Object> resultMap = objectMapper.readValue(result, Map.class);
+            if (!(resultMap.get("watermark") instanceof Map<?, ?> watermark) || !appId.equals(watermark.get("appid")))
+                throw new BusinessException("微信运动数据来源校验失败");
+            if (!(watermark.get("timestamp") instanceof Number timestamp)
+                    || Math.abs(java.time.Instant.now().getEpochSecond() - timestamp.longValue()) > 600)
+                throw new BusinessException("微信运动数据已过期，请重新同步");
             return resultMap;
+        } catch (BusinessException e) { throw e;
         } catch (Exception e) {
-            log.error("解密微信运动数据失败：{}", e.getMessage(), e);
-            throw new BusinessException("解密失败：" + e.getMessage());
+            log.warn("解密微信运动数据失败");
+            throw new BusinessException("微信运动数据解密失败，请重新同步");
         }
     }
 }

@@ -1,0 +1,14 @@
+.web-login-page { min-height: 100vh; box-sizing: border-box; padding: 70rpx 32rpx; background: #f3faf6; }
+.confirm-card { padding: 48rpx 36rpx; background: #fff; border-radius: 32rpx; }
+.badge, .title, .description, .hint, .message { display: block; }
+.badge { color: #13815b; font-size: 24rpx; }
+.title { margin: 24rpx 0; font-size: 42rpx; font-weight: 700; color: #1f2937; }
+.description, .message { color: #53665c; font-size: 28rpx; line-height: 1.8; margin-bottom: 28rpx; }
+.avatar-picker { margin: 30rpx 0 24rpx; font-size: 26rpx; background: #f3faf6; }
+.avatar-picker image { width: 120rpx; height: 120rpx; border-radius: 60rpx; display: block; margin: 16rpx auto; }
+.nickname { padding: 24rpx; border: 1rpx solid #dbe7df; border-radius: 16rpx; font-size: 28rpx; }
+.hint { color: #819087; font-size: 23rpx; line-height: 1.7; margin: 16rpx 0; }
+.sync-option { display: flex; align-items: center; justify-content: space-between; margin-top: 36rpx; font-size: 27rpx; }
+.confirm { margin-top: 36rpx; background: #159c66; color: #fff; border-radius: 16rpx; font-size: 30rpx; }
+.cancel { margin-top: 20rpx; background: #f2f5f3; color: #58675d; font-size: 28rpx; }
+.message { margin-top: 28rpx; }

@@ -1,6 +1,14 @@
 import { defineStore } from 'pinia'
 import request from '../utils/request'
 
+function recordsFromResponse(response, label) {
+  if (response?.code !== 200 && response?.code !== 0) {
+    throw new Error(response?.message || `${label}加载失败，请稍后重试`)
+  }
+  if (!Array.isArray(response.data?.records)) throw new Error(`${label}加载失败，请稍后重试`)
+  return response.data.records
+}
+
 export const useAnalyticsStore = defineStore('analytics', {
   state: () => ({
     healthRecords: [],
@@ -12,12 +20,12 @@ export const useAnalyticsStore = defineStore('analytics', {
   actions: {
     async fetchHealthRecords(userId, params = {}) {
       const response = await request.get(`/health/records/${userId}`, { params })
-      this.setHealthRecords(response?.data?.records || [], userId)
+      this.setHealthRecords(recordsFromResponse(response, '健康记录'), userId)
     },
 
     async fetchSportRecords(userId, params = {}) {
       const response = await request.get(`/sport/records/${userId}`, { params })
-      this.setSportRecords(response?.data?.records || [], userId)
+      this.setSportRecords(recordsFromResponse(response, '运动记录'), userId)
     },
 
     setHealthRecords(records, userId = null) {

@@ -74,6 +74,21 @@ export async function login(credentials) {
   const { data } = await withRefreshLock(() => cookiePost('/user/login', credentials))
   return accept(data.data)
 }
+export async function createWechatSession() {
+  const { data } = await cookiePost('/user/wechat/web-session')
+  return data.data
+}
+export async function wechatSessionStatus(session) {
+  const { data } = await cookiePost('/user/wechat/web-session/status', { ticket: session.ticket, proof: session.proof })
+  return data.data.status
+}
+export async function loginWithWechat(session) {
+  const version = ++generation
+  closing = false
+  const { data } = await withRefreshLock(() => cookiePost('/user/wechat/web-session/consume', { ticket: session.ticket, proof: session.proof }))
+  if (version !== generation || closing) throw new Error('登录已取消，请重新扫码')
+  return accept(data.data)
+}
 export function ensureSession(force = false, failedToken = '') {
   if (closing) return Promise.resolve('')
   if (failedToken && authState.token && authState.token !== failedToken) return Promise.resolve(authState.token)

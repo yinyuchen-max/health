@@ -41,8 +41,9 @@ public class FamilyController {
     }
     @GetMapping("/members/{id}/report")
     @RateLimit(key = "family-report", maxRequests = 10, timeWindow = 1, limitBy = LimitType.USER)
-    public Result<SmartHealthOverviewDTO> report(@PathVariable long id) {
-        return Result.success(family.report(security.getCurrentUserId(), id));
+    public Result<SmartHealthOverviewDTO> report(@PathVariable long id,
+                                                 @RequestParam(defaultValue = "false") boolean refresh) {
+        return Result.success(family.report(security.getCurrentUserId(), id, refresh));
     }
     @PostMapping("/members/{id}/reminders")
     @RateLimit(key = "family-remind", maxRequests = 10, timeWindow = 1, limitBy = LimitType.USER)

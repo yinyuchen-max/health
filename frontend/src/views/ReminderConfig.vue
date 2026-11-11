@@ -31,8 +31,8 @@
             <el-form-item label="重复频率" prop="frequency">
               <el-select v-model="form.frequency" placeholder="选择频率" style="width: 100%">
                 <el-option label="每天" value="daily" />
-                <el-option label="每周" value="weekly" />
-                <el-option label="自定义" value="custom" />
+                <el-option label="每周一" value="weekly" />
+                <el-option label="隔天" value="custom" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -45,16 +45,46 @@
         <el-form-item>
           <div class="action-group">
             <el-button type="primary" @click="saveConfig" :loading="isLoading">
-              {{ reminderCount === 0 ? '创建提醒' : '更新设置' }}
+              {{ editingId == null ? '添加提醒' : '保存修改' }}
             </el-button>
-            <el-button @click="loadSettings" :loading="isLoading">加载设置</el-button>
             <el-button @click="testNotification" :disabled="!form.type">测试提醒</el-button>
-            <el-button @click="resetForm">重置</el-button>
+            <el-button @click="resetForm()">{{ editingId == null ? '重置' : '取消编辑' }}</el-button>
           </div>
         </el-form-item>
         <el-alert v-if="hasError" title="错误" :description="reminderStore.error" type="error" show-icon closable @close="reminderStore.clearError()" />
       </el-form>
     </div>
+
+    <section class="main-card reminders-card" aria-label="已设置的提醒">
+      <div class="reminders-header">
+        <div>
+          <h3 class="section-title">已设置的提醒 <span class="reminder-total">{{ reminderCount }} 条</span></h3>
+          <p class="list-description">保存后的提醒会显示在这里，可编辑或删除。</p>
+        </div>
+        <el-button :loading="isLoading" @click="loadSettings">刷新列表</el-button>
+      </div>
+      <el-table :data="reminderStore.preferences" v-loading="isLoading" row-key="id" empty-text="暂无提醒，请先在上方添加提醒">
+        <el-table-column label="提醒类型" min-width="140">
+          <template #default="{ row }">{{ row.typeName || getTypeName(row.type) }}</template>
+        </el-table-column>
+        <el-table-column prop="time" label="提醒时间" min-width="110" />
+        <el-table-column label="重复频率" min-width="150">
+          <template #default="{ row }">{{ getFrequencyName(row.frequency) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" min-width="100">
+          <template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '已启用' : '已停用' }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="智能模式" min-width="100">
+          <template #default="{ row }">{{ row.smartMode ? '开启' : '关闭' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="140" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link :disabled="isLoading" @click="editReminder(row)">编辑</el-button>
+            <el-button type="danger" link :disabled="isLoading" @click="deleteReminder(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </section>
 
     <el-row :gutter="16" style="margin-top: 16px">
       <el-col :xs="24" :sm="12">
@@ -89,7 +119,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useReminderStore } from '../store/reminder'
 import { useUserStore } from '../store/user'
@@ -98,19 +128,22 @@ import { Bell, TrendCharts, Lightning, Check } from '@element-plus/icons-vue'
 const formRef = ref()
 const reminderStore = useReminderStore()
 const userStore = useUserStore()
+const editingId = ref(null)
 
-const form = reactive({ type: '', time: null, frequency: '', smartMode: false })
+const form = reactive({ type: '', time: null, frequency: '', smartMode: false, enabled: true })
+const draftKey = () => `reminderDraft:${userStore.userInfo?.id || ''}`
 
 watch(form, (newForm) => {
   if (newForm.type && newForm.time && newForm.frequency) {
-    localStorage.setItem('reminderDraft', JSON.stringify(newForm))
+    if (editingId.value == null) localStorage.setItem(draftKey(), JSON.stringify(newForm))
   }
 }, { deep: true })
 
-onMounted(() => {
-  const draft = localStorage.getItem('reminderDraft')
+onMounted(async () => {
+  const draft = localStorage.getItem(draftKey())
   if (draft) { try { Object.assign(form, JSON.parse(draft)) } catch {} }
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission()
+  await reminderStore.fetchPreferences()
 })
 
 const rules = {
@@ -142,19 +175,37 @@ const healthAdvices = computed(() => {
 })
 
 const saveConfig = async () => {
-  if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (valid) {
-      try {
-        const preferenceData = { ...form, userId: userStore.userInfo?.id || 1, enabled: true }
-        const existing = reminderStore.preferences.find(p => p.type === form.type)
-        if (existing) preferenceData.id = existing.id
-        const success = await reminderStore.savePreference(preferenceData)
-        if (success) { ElMessage.success('提醒设置已保存'); localStorage.removeItem('reminderDraft') }
-        else ElMessage.error(reminderStore.error || '保存失败')
-      } catch { ElMessage.error('保存失败，请检查网络连接') }
-    }
-  })
+  if (!formRef.value || isLoading.value) return
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid || isLoading.value) return
+  const userId = userStore.userInfo?.id
+  if (!userId) { ElMessage.error('用户信息未就绪，请稍后重试'); return }
+  const preferenceData = { ...form, ...(editingId.value == null ? {} : { id: editingId.value }) }
+  const success = await reminderStore.savePreference(preferenceData)
+  if (success) {
+    await resetForm(false)
+    if (reminderStore.error) ElMessage.warning(reminderStore.error)
+    else ElMessage.success('提醒设置已保存')
+  } else ElMessage.error(reminderStore.error || '保存失败')
+}
+
+const editReminder = (reminder) => {
+  editingId.value = reminder.id
+  Object.assign(form, { type: reminder.type, time: reminder.time, frequency: reminder.frequency,
+    smartMode: !!reminder.smartMode, enabled: reminder.enabled !== false })
+  nextTick(() => formRef.value?.clearValidate())
+}
+
+const deleteReminder = async (reminder) => {
+  if (isLoading.value) return
+  try {
+    await ElMessageBox.confirm(`确定删除「${getTypeName(reminder.type)} ${reminder.time}」吗？删除后将停止这条提醒。`, '删除提醒',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' })
+  } catch { return }
+  if (await reminderStore.deletePreference(reminder.id)) {
+    if (editingId.value === reminder.id) await resetForm(false)
+    ElMessage.success('提醒已删除')
+  } else ElMessage.error(reminderStore.error || '删除失败')
 }
 
 const testNotification = () => {
@@ -169,13 +220,22 @@ const testNotification = () => {
 }
 
 const loadSettings = async () => {
-  try { await reminderStore.fetchPreferences(); ElMessage.success('设置加载成功') }
-  catch { ElMessage.error('加载设置失败') }
+  if (await reminderStore.fetchPreferences()) ElMessage.success('提醒列表已刷新')
+  else ElMessage.error(reminderStore.error || '加载设置失败')
 }
 
-const resetForm = () => { if (formRef.value) formRef.value.resetFields(); localStorage.removeItem('reminderDraft'); ElMessage.info('表单已重置') }
+const resetForm = async (notify = true) => {
+  editingId.value = null
+  formRef.value?.resetFields()
+  Object.assign(form, { type: '', time: null, frequency: '', smartMode: false, enabled: true })
+  localStorage.removeItem(draftKey())
+  await nextTick()
+  formRef.value?.clearValidate()
+  if (notify) ElMessage.info('表单已重置')
+}
 
 const getTypeName = (type) => ({ bloodPressure: '血压测量', bloodSugar: '血糖检测', weight: '体重记录', exercise: '运动提醒' }[type] || type)
+const getFrequencyName = (frequency) => ({ daily: '每天', weekly: '每周一', custom: '自定义（隔天）' }[frequency] || frequency)
 </script>
 
 <style scoped>
@@ -185,6 +245,10 @@ const getTypeName = (type) => ({ bloodPressure: '血压测量', bloodSugar: '血
 .section-icon { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: #FEF3C7; border-radius: 10px; color: #F59E0B; }
 .section-title { margin: 0; font-size: 18px; font-weight: 700; color: #1E293B; }
 .reminder-form { max-width: 700px; }
+.reminders-card { margin-top: 16px; }
+.reminders-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.reminder-total { margin-left: 8px; color: #64748B; font-size: 14px; font-weight: 400; }
+.list-description { margin: 8px 0 0; color: #64748B; font-size: 13px; }
 .action-group { display: flex; gap: 8px; flex-wrap: wrap; }
 .stat-card { background: #fff; border-radius: 16px; padding: 20px; border: 1px solid #F0F4F8; }
 .stat-header { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: #1E293B; margin-bottom: 12px; }

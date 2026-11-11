@@ -66,7 +66,7 @@
           <text class="data-emoji">👟</text>
         </view>
         <text class="data-label">步数</text>
-        <text class="data-value">{{todaySteps || '--'}}</text>
+        <text class="data-value">{{todaySteps}}</text>
         <text class="data-unit">/ 10,000步</text>
         <view class="progress-bar">
           <view class="progress-bar-inner" style="width: {{stepsPercent}}%"></view>

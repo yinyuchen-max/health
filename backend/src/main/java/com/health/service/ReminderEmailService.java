@@ -126,6 +126,8 @@ public class ReminderEmailService {
             case "bloodSugar" -> "血糖检测提醒";
             case "weight" -> "体重记录提醒";
             case "exercise" -> "运动提醒";
+            case "sleep" -> "睡眠提醒";
+            case "water" -> "饮水提醒";
             default -> "健康提醒";
         };
     }
@@ -145,6 +147,8 @@ public class ReminderEmailService {
             case "bloodSugar" -> "空腹血糖正常值 3.9-6.1 mmol/L，餐后2小时血糖 &lt; 7.8 mmol/L。建议记录每次检测结果以便追踪趋势。";
             case "weight" -> "建议每天固定时间（如早晨空腹）称量体重，穿着轻便衣物。体重的短期波动通常是水分变化，关注长期趋势更重要。";
             case "exercise" -> "世界卫生组织建议成人每周至少150分钟中等强度有氧运动，或75分钟高强度运动。运动前热身5-10分钟，运动后注意拉伸。";
+            case "sleep" -> "尽量固定入睡和起床时间。睡前减少咖啡因和屏幕使用，醒来后记录实际睡眠时长。";
+            case "water" -> "白天少量多次饮水。运动、出汗或天气炎热时可以适当增加，不把口渴当作唯一信号。";
             default -> "保持健康的生活方式，定期关注身体状况。如有不适请及时就医。";
         };
     }

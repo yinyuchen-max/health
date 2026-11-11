@@ -1,5 +1,6 @@
 <template>
   <div class="sport-record-page">
+    <WechatStepsCard />
     <el-row :gutter="16">
       <el-col :xs="24" :sm="12" :lg="6" v-for="item in summaryCards" :key="item.label">
         <div class="summary-card">
@@ -100,6 +101,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import WechatStepsCard from '../components/WechatStepsCard.vue'
 import { Search, Plus, Timer } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../utils/request'
@@ -163,7 +165,8 @@ const estimateCalories = () => {
 const loadRecords = async () => {
   loading.value = true
   try {
-    const userId = userStore.userInfo?.id || 1
+    const userId = userStore.userInfo?.id
+    if (!userId) { ElMessage.error('用户信息未就绪，请稍后重试'); return }
     const response = await request.get(`/sport/records/${userId}`, { params: { pageNum: 1, pageSize: 1000 } })
     records.value = response?.data?.records || []
     analyticsStore.setSportRecords(records.value, userId)
@@ -185,7 +188,8 @@ const submitForm = async () => {
   if (!valid) return
   estimateCalories(); saving.value = true
   try {
-    const userId = userStore.userInfo?.id || 1
+    const userId = userStore.userInfo?.id
+    if (!userId) { ElMessage.error('用户信息未就绪，请稍后重试'); return }
     const payload = { userId, ...formState }
     if (editingRecordId.value) { await request.put(`/sport/record/${editingRecordId.value}`, payload); ElMessage.success('运动记录已更新') }
     else { await request.post('/sport/record', payload); ElMessage.success('运动记录已新增') }

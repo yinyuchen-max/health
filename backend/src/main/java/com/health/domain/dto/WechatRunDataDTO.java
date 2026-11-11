@@ -1,8 +1,11 @@
 package com.health.domain.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 public class WechatRunDataDTO {
-    private String encryptedData;
-    private String iv;
+    @NotBlank @Size(max = 65536) private String encryptedData;
+    @NotBlank @Size(max = 64) private String iv;
 
     public String getEncryptedData() { return encryptedData; }
     public void setEncryptedData(String encryptedData) { this.encryptedData = encryptedData; }

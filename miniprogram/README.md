@@ -35,7 +35,7 @@
 1. 用微信开发者工具打开 `health/miniprogram` 目录
 2. 在 `project.config.json` 中填写你的 AppID（或使用测试号）
 3. 勾选「不校验合法域名」（开发阶段）
-4. 在 `config/environment.js` 配置各环境后端地址。开发版在开发者工具内使用本机地址，开发版真机、体验版和正式版默认使用 `https://api.zpew.top`。局域网真机调试可修改 `develop` 地址；正式版需使用配置在微信后台白名单中的 HTTPS 域名。
+4. 在 `config/environment.js` 配置各环境后端地址。开发版在开发者工具内使用 `http://localhost:8080`；当前开发版真机通过同一 Wi-Fi 使用电脑的 `http://10.101.128.92:8080`。电脑 IP 变化时更新 `develop` 并重新上传开发版。手机需进入开发版的调试模式进行局域网 HTTP 联调。体验版和正式版保留 HTTPS 地址配置；部署前必须确认域名可解析且已加入微信后台合法域名。
 
 环境选择回归检查：`node --test miniprogram/tests/environment.test.js`（在项目根目录运行）。
 
@@ -99,3 +99,8 @@ miniprogram/
 - `SubscribeMessage.java` / `SubscribeMessageMapper.java` - 订阅消息实体和 Mapper
 
 登录响应现包含 `token`、`refreshToken`、`expiresIn`、`refreshExpiresAt`。凭据在 `authSession` 中保存；请求和流式请求自动刷新，并合并并发刷新。退出调用 `/api/user/native-logout`，刷新调用 `/api/user/native-refresh`。网页端 Cookie 接口不用于小程序，详见 [认证安全说明](../docs/authentication-security.md)。
+
+
+## 网页微信扫码登录
+
+扫码确认、微信步数持久化和昵称头像同步的接口、配置与发布顺序见 [微信扫码登录与两端数据同步](../docs/wechat-web-login.md)。

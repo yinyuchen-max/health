@@ -8,6 +8,7 @@ import com.health.common.utils.JwtUtil;
 import com.health.common.utils.SecurityUtil;
 import com.health.common.exception.AuthStoreUnavailableException;
 import com.health.controller.UserController;
+import com.health.controller.WechatController;
 import com.health.domain.dto.AuthTokens;
 import com.health.domain.entity.User;
 import com.health.mapper.UserMapper;
@@ -60,6 +61,13 @@ class AuthHttpSecurityTest {
         @Bean UserService users() { return mock(UserService.class); }
         @Bean SecurityUtil securityUtil() { return mock(SecurityUtil.class); }
         @Bean WechatAuthService wechat() { return mock(WechatAuthService.class); }
+        @Bean WechatStepService steps() { return mock(WechatStepService.class); }
+        @Bean WechatQrLoginService qr() { return mock(WechatQrLoginService.class); }
+        @Bean WechatProfileService profiles() { return mock(WechatProfileService.class); }
+        @Bean WechatController wechatController(WechatQrLoginService qr, AuthSessionService sessions, AuthCookies cookies,
+                SecurityUtil security, WechatAuthService wechat, WechatStepService steps, WechatProfileService profiles) {
+            return new WechatController(qr, sessions, cookies, security, wechat, steps, profiles);
+        }
         @Bean UserMapper mapper() { return mock(UserMapper.class); }
     }
     AnnotationConfigWebApplicationContext context;
@@ -134,6 +142,26 @@ class AuthHttpSecurityTest {
         mvc.perform(post("/api/user/native-refresh").cookie(new Cookie(AuthCookies.REFRESH,"web-token"))
                 .contentType("application/json").content("{}"))
                 .andExpect(status().isBadRequest());
+    }
+    @Test void qrExchangeRequiresCsrfSetsBrowserCookieAndNeverExposesRefreshToken() throws Exception {
+        var qr = context.getBean(WechatQrLoginService.class);
+        String ticket = "a".repeat(32), proof = "b".repeat(43);
+        String body = json.writeValueAsString(Map.of("ticket", ticket, "proof", proof));
+        mvc.perform(post("/api/user/wechat/web-session")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/user/wechat/web-session/status").contentType("application/json").content(body)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/user/wechat/web-session/consume").contentType("application/json").content(body)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/user/wechat/web-confirm").contentType("application/json").content("{\"ticket\":\"" + ticket + "\"}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/user/wechat/steps")).andExpect(status().isUnauthorized());
+        var csrf = mvc.perform(get("/api/user/csrf")).andReturn().getResponse();
+        String masked = json.readTree(csrf.getContentAsString()).at("/data/token").asText();
+        when(qr.consume(ticket, proof)).thenReturn(new User());
+        mvc.perform(post("/api/user/wechat/web-session/consume").cookie(csrf.getCookie(AuthCookies.CSRF)).header("X-CSRF-TOKEN", masked)
+                        .contentType("application/json").content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.token").value("test.access.jwt"))
+                .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
+                .andExpect(cookie().httpOnly(AuthCookies.REFRESH, true)).andExpect(cookie().secure(AuthCookies.REFRESH, true));
+        verify(sessions).issue(any(), eq(AuthSessionService.WEB));
     }
     @Test void staleCsrfCannotRevokeAndFreshTokenAllowsLogout() throws Exception {
         var stale = mvc.perform(get("/api/user/csrf")).andReturn().getResponse();

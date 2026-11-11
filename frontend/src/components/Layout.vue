@@ -77,7 +77,7 @@
               <el-icon :size="22"><Operation /></el-icon>
             </el-button>
             <div class="greeting-area">
-              <h2 class="greeting-title">{{ greeting }}，{{ userStore.userInfo.username || '用户' }} <span class="wave">👋</span></h2>
+              <h2 class="greeting-title">{{ greeting }}，{{ displayName(userStore.userInfo) }} <span class="wave">👋</span></h2>
               <p class="greeting-sub">关爱自己，从每一次记录开始</p>
             </div>
           </div>
@@ -89,15 +89,15 @@
             </div>
             <el-dropdown trigger="click" @command="handleCommand">
               <div class="user-dropdown">
-                <el-avatar :size="36" class="user-avatar">{{ (userStore.userInfo.username || 'U').slice(0, 1).toUpperCase() }}</el-avatar>
-                <span class="username">{{ userStore.userInfo.username || '用户' }}</span>
+                <el-avatar :size="36" :src="avatarUrl(userStore.userInfo)" class="user-avatar">{{ displayName(userStore.userInfo).slice(0, 1).toUpperCase() }}</el-avatar>
+                <span class="username">{{ displayName(userStore.userInfo) }}</span>
                 <el-icon class="dropdown-arrow"><ArrowDown /></el-icon>
               </div>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="profile">个人信息</el-dropdown-item>
                   <el-dropdown-item command="family">家庭成员</el-dropdown-item>
-                  <el-dropdown-item command="ai-settings">AI 服务</el-dropdown-item>
+                  <el-dropdown-item command="ai-chat">AI 服务</el-dropdown-item>
                   <el-dropdown-item command="password">修改密码</el-dropdown-item>
                   <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
                 </el-dropdown-menu>
@@ -123,6 +123,7 @@ import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
 import request from '../utils/request'
+import { displayName, avatarUrl } from '../utils/user-display'
 import DoctorPet from './DoctorPet.vue'
 import {
   ArrowDown,
@@ -138,6 +139,7 @@ import {
   Timer,
   User,
   UserFilled,
+  ChatDotRound,
   ChatLineRound
 } from '@element-plus/icons-vue'
 
@@ -175,7 +177,7 @@ const menuItems = computed(() => [
   { index: '/app/reminder', icon: Bell, label: '提醒设置', color: '#F59E0B', hidden: false },
   { index: '/app/history', icon: Clock, label: '历史记录', color: '#8B5CF6', hidden: false },
   { index: '/app/analytics', icon: DataAnalysis, label: '数据分析', color: '#06B6D4', hidden: false },
-  { index: '/app/ai-settings', icon: Setting, label: 'AI 服务', color: '#6366F1', hidden: false },
+  { index: '/app/ai-chat', icon: ChatDotRound, label: 'AI 服务', color: '#6366F1', hidden: false },
   { index: '/app/smart-health', icon: Opportunity, label: '智能健康', color: '#EC4899', hidden: false },
   { index: '/app/doctors', icon: FirstAidKit, label: '医生列表', color: '#14B8A6', hidden: false },
   { index: '/app/doctor-chat', icon: ChatLineRound, label: '医生咨询', color: '#F97316', hidden: false },
@@ -204,8 +206,8 @@ const handleCommand = async (command) => {
     router.push('/app/profile')
   } else if (command === 'family') {
     router.push('/app/family')
-  } else if (command === 'ai-settings') {
-    router.push('/app/ai-settings')
+  } else if (command === 'ai-chat') {
+    router.push('/app/ai-chat')
   } else if (command === 'password') {
     router.push('/app/change-password')
   }

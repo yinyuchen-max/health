@@ -19,12 +19,18 @@
       <div class="form-panel">
         <div class="form-card">
           <div class="card-header">
-            <p>账号登录</p>
+            <p>{{ loginMode === 'wechat' ? '微信扫码登录' : '账号登录' }}</p>
             <h2>欢迎回来</h2>
             <span>登录后进入健康数据总览与管理中心</span>
           </div>
 
+          <div class="login-mode" role="group" aria-label="登录方式">
+            <el-button :type="loginMode === 'account' ? 'primary' : ''" @click="loginMode = 'account'">账号密码</el-button>
+            <el-button :type="loginMode === 'wechat' ? 'success' : ''" @click="loginMode = 'wechat'">微信扫码</el-button>
+          </div>
+          <WechatLoginPanel v-if="loginMode === 'wechat'" @success="handleWechatSuccess" />
           <el-form
+            v-else
             ref="loginFormRef"
             :model="loginForm"
             :rules="rules"
@@ -89,11 +95,13 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Lock, User } from '@element-plus/icons-vue'
 import AnimatedCharacters from '../components/AnimatedCharacters.vue'
+import WechatLoginPanel from '../components/WechatLoginPanel.vue'
 import request from '../utils/request'
 import { useUserStore } from '../store/user'
 
 const router = useRouter()
 const userStore = useUserStore()
+const loginMode = ref('account')
 
 const loginForm = reactive({
   username: '',
@@ -143,27 +151,7 @@ const handleLogin = () => {
     try {
       await userStore.login(loginForm)
 
-      // 并行拉取用户信息与医生身份，减少移动端串行等待
-      const [userInfoResult, doctorResult] = await Promise.allSettled([
-        request.get('/user/info'),
-        request.get('/doctor/check')
-      ])
-
-      const userInfo = userInfoResult.status === 'fulfilled' ? userInfoResult.value?.data : null
-      if (!userInfo?.id) throw new Error('登录成功，但用户信息暂时不可用，请重试')
-      userStore.setUserInfo(userInfo)
-
-      ElMessage.success({
-        message: '登录成功',
-        duration: 1500,
-        showClose: true
-      })
-
-      // 判断是否为已审核医生，医生自动进入医生端（立即跳转，不再人为延迟）
-      const isDoctor = doctorResult.status === 'fulfilled' &&
-        (doctorResult.value?.data === true || doctorResult.value === true)
-
-      router.push(isDoctor ? '/doctor/dashboard' : '/app/dashboard')
+      await finishLogin()
     } catch (error) {
       let errorMessage = error?.message || '登录失败'
 
@@ -197,6 +185,23 @@ const handleLogin = () => {
 
 const handleRegister = () => {
   router.push('/register')
+}
+
+async function finishLogin() {
+  const [userInfoResult, doctorResult] = await Promise.allSettled([
+    request.get('/user/info'), request.get('/doctor/check')
+  ])
+  const userInfo = userInfoResult.status === 'fulfilled' ? userInfoResult.value?.data : null
+  if (!userInfo?.id) throw new Error('登录成功，但用户信息暂时不可用，请重试')
+  userStore.setUserInfo(userInfo)
+  const isDoctor = doctorResult.status === 'fulfilled' &&
+    (doctorResult.value?.data === true || doctorResult.value === true)
+  ElMessage.success('登录成功')
+  await router.push(isDoctor ? '/doctor/dashboard' : '/app/dashboard')
+}
+async function handleWechatSuccess() {
+  try { await finishLogin() }
+  catch (err) { ElMessage.error(err.message || '用户信息加载失败，请重试登录') }
 }
 
 const handleDoctorRegister = () => {
@@ -276,6 +281,8 @@ const handleDoctorRegister = () => {
   width: min(430px, 100%);
   padding: 8px 6px;
 }
+.login-mode { display: flex; gap: 12px; margin-bottom: 24px; }
+.login-mode .el-button { flex: 1; margin-left: 0; }
 
 .card-header {
   margin-bottom: 34px;

@@ -10,11 +10,18 @@ import com.health.service.AppointmentInformationExtractor;
 import com.health.service.DoctorAppointmentService;
 import com.health.service.DoctorService;
 import com.health.service.UserService;
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.health.service.DepartmentCatalog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -22,7 +29,9 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 @Service
 public class AppointmentConversationServiceImpl implements AppointmentConversationService {
@@ -37,7 +46,10 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
     private final DoctorService doctorService;
     private final UserService userService;
     private final DepartmentCatalog departmentCatalog;
+    private final StringRedisTemplate redis;
+    private final ObjectMapper json;
     private final ConcurrentHashMap<Object, AppointmentDraft> drafts = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, Object> locks = new ConcurrentHashMap<>();
     private final Set<Object> offeredUsers = ConcurrentHashMap.newKeySet();
 
     public AppointmentConversationServiceImpl(DoctorAppointmentService doctorAppointmentService,
@@ -45,24 +57,45 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
                                               DoctorService doctorService,
                                               UserService userService,
                                               DepartmentCatalog departmentCatalog) {
+        this(doctorAppointmentService, appointmentInformationExtractor, doctorService, userService, departmentCatalog, null, new ObjectMapper());
+    }
+
+    @Autowired
+    public AppointmentConversationServiceImpl(DoctorAppointmentService doctorAppointmentService,
+                                              AppointmentInformationExtractor appointmentInformationExtractor,
+                                              DoctorService doctorService,
+                                              UserService userService,
+                                              DepartmentCatalog departmentCatalog,
+                                              @Autowired(required = false) StringRedisTemplate redis,
+                                              ObjectMapper json) {
         this.doctorAppointmentService = doctorAppointmentService;
         this.appointmentInformationExtractor = appointmentInformationExtractor;
         this.doctorService = doctorService;
         this.userService = userService;
         this.departmentCatalog = departmentCatalog;
+        this.redis = redis;
+        this.json = json.copy();
+        this.json.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE);
+        this.json.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
     }
 
     @Override
     public String handleMessage(String userMessage, Long userId) {
+        return withLock(userId, () -> handleLocked(userMessage, userId));
+    }
+
+    private String handleLocked(String userMessage, Long userId) {
         Object conversationId = conversationId(userId);
         String message = userMessage == null ? "" : userMessage.trim();
-        AppointmentDraft draft = drafts.get(conversationId);
+        AppointmentDraft draft = loadDraft(userId);
 
         if (draft != null && isCancellation(message)) {
             return cancelAppointment(conversationId);
         }
         if (draft != null && draft.awaitingDoctorSelection) {
-            return handleDoctorSelection(draft, message);
+            String reply = handleDoctorSelection(draft, message);
+            saveDraft(userId, draft);
+            return reply;
         }
         if (draft != null && draft.awaitingConfirmation && isConfirmation(message)) {
             return saveConfirmedAppointment(conversationId, draft, userId);
@@ -81,7 +114,7 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
             }
             draft = new AppointmentDraft();
             prefillFromUserProfile(draft, userId);
-            drafts.put(conversationId, draft);
+            saveDraft(userId, draft);
             offeredUsers.remove(conversationId);
         }
 
@@ -105,12 +138,14 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
                 validationErrors.add(0, "未能从本次消息中识别出有效预约信息");
             }
             draft.awaitingConfirmation = false;
+            saveDraft(userId, draft);
             return buildMissingFieldsReply(missingFields, validationErrors);
         }
 
         if (!draft.appointmentTime.isAfter(LocalDateTime.now(ZoneId.of("Asia/Shanghai")))) {
             draft.appointmentTime = null;
             draft.awaitingConfirmation = false;
+            saveDraft(userId, draft);
             return "预约时间必须晚于当前时间。无法使用该预约时间，请重新提供，例如：" + exampleAppointmentTime() + "。";
         }
 
@@ -118,11 +153,13 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
         if (draft.doctorId == null && !draft.doctorDeclined) {
             String selectionReply = tryAskDoctorSelection(draft);
             if (selectionReply != null) {
+                saveDraft(userId, draft);
                 return selectionReply;
             }
         }
 
         draft.awaitingConfirmation = true;
+        saveDraft(userId, draft);
         return buildConfirmationReply(draft);
     }
 
@@ -228,7 +265,7 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
             return "预约信息保存失败，请稍后回复“确认预约”重试。";
         }
 
-        drafts.remove(conversationId);
+        discardDraft(conversationId);
         return String.format(
                 "预约成功！姓名：%s，年龄：%d岁，预约科室：%s，预约医生：%s，预约时间：%s，联系电话：%s。",
                 draft.patientName,
@@ -429,15 +466,16 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
     }
 
     private boolean shouldStartAppointment(String message, Object conversationId) {
+        if (isNegatedAppointment(message)) return false;
         return hasAppointmentIntent(message)
-                || (offeredUsers.contains(conversationId) && isAffirmative(message))
-                || hasLikelyAppointmentDetails(message);
+                || (offeredUsers.contains(conversationId) && isAffirmative(message));
     }
 
-    private boolean hasLikelyAppointmentDetails(String message) {
-        boolean containsDepartment = departmentCatalog.mentionedIn(message);
-        long digitCount = message.chars().filter(Character::isDigit).count();
-        return containsDepartment && digitCount >= 5;
+    private boolean isNegatedAppointment(String message) {
+        String compact = compactMessage(message);
+        return compact.contains("不要预约") || compact.contains("不想预约") || compact.contains("先不预约")
+                || compact.contains("不预约") || compact.contains("别预约") || compact.contains("不用预约")
+                || compact.contains("不要挂号") || compact.contains("不挂号");
     }
 
     private boolean hasAppointmentIntent(String message) {
@@ -468,7 +506,8 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
 
     private boolean isCancellation(String message) {
         String compact = compactMessage(message);
-        return compact.contains("取消预约") || compact.contains("不预约了") || compact.contains("停止填写");
+        return compact.contains("取消预约") || compact.contains("不预约了") || compact.contains("停止填写")
+                || isNegatedAppointment(message);
     }
 
     private String compactMessage(String message) {
@@ -482,15 +521,85 @@ public class AppointmentConversationServiceImpl implements AppointmentConversati
     }
 
     private String cancelAppointment(Object conversationId) {
-        drafts.remove(conversationId);
+        discardDraft(conversationId);
         offeredUsers.remove(conversationId);
         return "已取消本次预约填写。";
+    }
+
+    private String withLock(Long userId, Supplier<String> work) {
+        Object local = locks.computeIfAbsent(userId == null ? 0L : userId, id -> new Object());
+        synchronized (local) {
+            if (redis == null || userId == null) return work.get();
+            String token = UUID.randomUUID().toString();
+            String lockKey = "appointment:lock:" + userId;
+            Boolean held;
+            try {
+                held = redis.opsForValue().setIfAbsent(lockKey, token, Duration.ofSeconds(60));
+            } catch (Exception exception) {
+                log.warn("预约锁不可用，仅在本进程内串行: {}", exception.getClass().getSimpleName());
+                return work.get();
+            }
+            if (!Boolean.TRUE.equals(held)) return "预约处理中，请稍后再发一次。";
+            try {
+                return work.get();
+            } finally {
+                try {
+                    redis.execute(new DefaultRedisScript<>(
+                            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+                            Long.class), List.of(lockKey), token);
+                } catch (Exception exception) {
+                    log.warn("释放预约锁失败: {}", exception.getClass().getSimpleName());
+                }
+            }
+        }
+    }
+
+    private AppointmentDraft loadDraft(Long userId) {
+        Object key = conversationId(userId);
+        if (redis != null && userId != null) {
+            try {
+                String raw = redis.opsForValue().get("appointment:draft:" + userId);
+                if (raw == null || raw.isBlank()) return null;
+                AppointmentDraft draft = json.readValue(raw, AppointmentDraft.class);
+                if (draft.recommendedDoctors == null) draft.recommendedDoctors = new ArrayList<>();
+                return draft;
+            } catch (Exception exception) {
+                log.warn("读取预约草稿失败: {}", exception.getClass().getSimpleName());
+            }
+        }
+        return drafts.get(key);
+    }
+
+    private void saveDraft(Long userId, AppointmentDraft draft) {
+        Object key = conversationId(userId);
+        if (redis == null || userId == null) {
+            drafts.put(key, draft);
+            return;
+        }
+        try {
+            redis.opsForValue().set("appointment:draft:" + userId, json.writeValueAsString(draft), Duration.ofMinutes(30));
+            drafts.remove(key);
+        } catch (Exception exception) {
+            log.warn("保存预约草稿失败: {}", exception.getClass().getSimpleName());
+            drafts.put(key, draft);
+        }
+    }
+
+    private void discardDraft(Object conversationId) {
+        drafts.remove(conversationId);
+        if (redis == null || !(conversationId instanceof Long userId)) return;
+        try {
+            redis.delete("appointment:draft:" + userId);
+        } catch (Exception exception) {
+            log.warn("删除预约草稿失败: {}", exception.getClass().getSimpleName());
+        }
     }
 
     private Object conversationId(Long userId) {
         return userId == null ? "default" : userId;
     }
 
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
     private static class AppointmentDraft {
         private String patientName;
         private Integer age;

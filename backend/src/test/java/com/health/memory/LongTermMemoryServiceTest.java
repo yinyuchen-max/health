@@ -55,6 +55,17 @@ class LongTermMemoryServiceTest {
         f.output(f.fact("UPDATE","goal.target_weight","目标65公斤",true));f.processor.process(earlyJob.id());f.drain();
         assertEquals("目标60公斤",f.repository.fact(1L,"goal.target_weight").content());
     }
+    @Test void deletingOneFactHidesOnlyMatchingChatAndDropsTheLiveSummary() throws Exception {
+        var f=new CognitiveMemoryFixture();f.remember("ADD","diet.preference","偏好清淡",false);
+        f.jdbc.update("INSERT INTO chat_context_state(user_id,revision,checkpoint_json,covered_through) VALUES(1,0,'{\"items\":[]}',1)");
+        f.jdbc.update("INSERT INTO chat_message_archive(message_id,turn_key,user_id,revision,role,content) VALUES('a','t1',1,0,'user','偏好清淡'),('b','t2',1,0,'user','今天跑步五公里')");
+        f.service.delete(1L,f.id("diet.preference"));
+        assertEquals(1,f.jdbc.queryForObject("SELECT COUNT(*) FROM chat_message_archive WHERE content='今天跑步五公里' AND include_in_context=TRUE",Integer.class));
+        assertEquals(1,f.jdbc.queryForObject("SELECT COUNT(*) FROM chat_message_archive WHERE content='偏好清淡' AND include_in_context=FALSE",Integer.class));
+        assertNull(f.jdbc.queryForObject("SELECT checkpoint_json FROM chat_context_state WHERE user_id=1",String.class));
+        f.service.clear(1L);
+        assertEquals(0,f.jdbc.queryForObject("SELECT COUNT(*) FROM chat_message_archive",Integer.class));
+    }
     @Test void deletingFactClearsEventsVersionsVectorsAndCancelsOldTasks() throws Exception {
         var f=new CognitiveMemoryFixture();f.remember("ADD","diet.preference","偏好清淡",false);Long id=f.id("diet.preference");
         var old=f.service.beginTurn(1L,"偏好清淡");f.service.completeTurn(old,"偏好清淡",()->{});

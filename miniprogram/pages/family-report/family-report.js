@@ -17,7 +17,9 @@ Page({
     this.setData({ overview: null, risks: [], insights: [] })
   },
   onUnload() { this.onHide() },
-  async load() {
+  load() { return this.fetchReport(false) },
+  regenerate() { return this.fetchReport(true) },
+  async fetchReport(refresh) {
     const sequence = this._sequence = (this._sequence || 0) + 1
     this.setData({ loading: true, error: '', overview: null, risks: [], insights: [] })
     try {
@@ -27,7 +29,7 @@ Page({
       const member = members.find(m => String(m.id) === this._bindingId && m.status === 'ACTIVE')
       if (!member) throw new Error('请先获得家人同意并完成绑定')
       this.setData({ memberName: member.memberName })
-      const overview = await get(`/api/family/members/${this._bindingId}/report`, {}, {
+      const overview = await get(`/api/family/members/${this._bindingId}/report?refresh=${refresh ? 'true' : 'false'}`, {}, {
         showLoading: false, showError: false, timeout: runtime.smartHealthTimeoutMs
       })
       if (sequence !== this._sequence || !this._visible) return

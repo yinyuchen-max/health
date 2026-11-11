@@ -1,4 +1,5 @@
 const { get, post, put, del } = require('../../utils/request')
+const { syncWeRun } = require('../../utils/wechat-data')
 
 // 运动类型配置（带emoji）
 const SPORT_TYPES = [
@@ -23,7 +24,8 @@ Page({
     editingId: null,
     saving: false,
     // 微信运动数据
-    todaySteps: 0,
+    todaySteps: null,
+    lastSyncAt: '',
     todayCalories: 0,
     todayDistance: 0,
     todaySportMinutes: 0,
@@ -53,72 +55,34 @@ Page({
   },
 
   onShow() {
-    this.loadWeRunData()
+    if (!getApp().checkLogin()) return
+    this.loadWeRunData().catch(() => {})
     this.loadRecords()
   },
 
-  // 获取微信运动数据
-  async loadWeRunData() {
-    try {
-      const authRes = await new Promise(resolve => {
-        wx.getSetting({
-          success(res) {
-            if (res.authSetting['scope.werun']) {
-              resolve(true)
-            } else {
-              wx.authorize({ scope: 'scope.werun', success: () => resolve(true), fail: () => resolve(false) })
-            }
-          },
-          fail: () => resolve(false)
-        })
-      })
-
-      if (!authRes) return
-
-      const runRes = await new Promise((resolve, reject) => {
-        wx.getWeRunData({ success: resolve, fail: reject })
-      })
-
-      const app = getApp()
-      const token = app.globalData.token
-      if (token && runRes.encryptedData) {
-        // 统一走 request 封装（自动携带 JWT、401 跳登录）
-        // 注意后端真实路径为 /api/user/wechat/decrypt-run-data（UserController 类级 @RequestMapping("/api/user")）
-        const data = await post('/api/user/wechat/decrypt-run-data', {
-          encryptedData: runRes.encryptedData,
-          iv: runRes.iv
-        }, { showLoading: false, showError: false })
-
-        if (data && data.stepInfoList) {
-          const steps = data.stepInfoList
-          const lastStep = steps[steps.length - 1]?.step || 0
-          const distance = (lastStep * 0.7 / 1000).toFixed(1) // 步数转公里
-          const calories = Math.round(lastStep * 0.04) // 粗略估算
-
-          // 获取今日运动时长
-          const userId = app.globalData.userInfo?.id
-          const today = new Date().toISOString().slice(0, 10)
-          const sportRes = await get(`/api/sport/records/${userId}?pageNum=1&pageSize=100`, {}, { showLoading: false }).catch(() => ({ records: [] }))
-          const todaySport = (sportRes.records || []).filter(r => r.recordDate === today)
-          const todaySportMinutes = todaySport.reduce((sum, r) => sum + Number(r.duration || 0), 0)
-
-          this.setData({
-            todaySteps: lastStep,
-            todayCalories: calories,
-            todayDistance: distance,
-            todaySportMinutes
-          })
-        }
-      }
-    } catch (err) {
-      console.log('微信运动数据获取失败:', err)
-    }
+  async loadWeRunData(requestPermission = false) {
+    const data = await syncWeRun({ requestPermission })
+    const steps = data.todaySteps
+    this.setData({
+      todaySteps: steps,
+      todayCalories: steps == null ? '--' : Math.round(steps * 0.04),
+      todayDistance: steps == null ? '--' : (steps * 0.7 / 1000).toFixed(1),
+      lastSyncAt: data.lastSyncAt ? data.lastSyncAt.replace('T', ' ') : ''
+    })
   },
 
-  // 同步微信运动
-  syncWeRun() {
-    this.loadWeRunData()
-    wx.showToast({ title: '同步中...', icon: 'loading' })
+  async syncWeRun() {
+    if (this.syncing) return
+    this.syncing = true
+    wx.showLoading({ title: '同步中...' })
+    try {
+      await this.loadWeRunData(true)
+      wx.hideLoading()
+      wx.showToast({ title: '同步成功', icon: 'success' })
+    } catch (error) {
+      wx.hideLoading()
+      wx.showToast({ title: error.message || '同步失败，请重试', icon: 'none' })
+    } finally { this.syncing = false }
   },
 
   async loadRecords() {
@@ -131,7 +95,8 @@ Page({
         const sportType = SPORT_TYPES.find(s => s.name === r.sportType)
         return { ...r, emoji: sportType?.emoji || '🏃' }
       })
-      this.setData({ records })
+      const today = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      this.setData({ records, todaySportMinutes: records.filter(r => r.recordDate === today).reduce((sum, r) => sum + Number(r.duration || 0), 0) })
     } catch (err) {
       console.error('加载运动记录失败:', err)
     }

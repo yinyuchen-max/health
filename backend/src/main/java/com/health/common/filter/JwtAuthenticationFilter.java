@@ -66,12 +66,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (AuthStoreUnavailableException | org.springframework.dao.DataAccessException e) {
                 SecurityContextHolder.clearContext();
-                sendJsonError(response, 503, "认证服务暂时不可用，请稍后重试"); return;
+                if (isAnonymousAllowed(request)) {
+                    log.debug("公开接口忽略不可用的登录态");
+                } else {
+                    sendJsonError(response, 503, "认证服务暂时不可用，请稍后重试"); return;
+                }
             } catch (Exception e) {
                 log.debug("JWT 认证失败");
                 SecurityContextHolder.clearContext();
-                sendJsonError(response, 401, "登录已失效，请重新登录"); return;
-                // Token 无效时不设置认证信息，由后续权限控制处理
+                // Public routes stay reachable when a client still attaches a stale bearer token.
+                if (!isAnonymousAllowed(request)) {
+                    sendJsonError(response, 401, "登录已失效，请重新登录"); return;
+                }
             }
         }
 
@@ -98,6 +104,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         // Cookie/native refresh authenticate independently, including when the access token has expired.
         if (List.of("/api/user/csrf", "/api/user/login", "/api/user/native-login", "/api/user/wechat-login",
+                "/api/user/wechat/web-session", "/api/user/wechat/web-session/status", "/api/user/wechat/web-session/consume",
                 "/api/user/refresh", "/api/user/native-refresh", "/api/user/web-logout", "/api/user/native-logout").contains(path)) return true;
         return path.startsWith("/static/") ||
                path.startsWith("/assets/") ||
@@ -105,5 +112,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                path.endsWith(".html") ||
                path.endsWith(".js") ||
                path.endsWith(".css");
+    }
+
+    /** Paths that SecurityConfig permits without a session. A bad bearer must not turn them into 401. */
+    private boolean isAnonymousAllowed(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        if ("GET".equals(request.getMethod()) && path.matches("/api/user/wechat/avatar/[a-f0-9]{32}")) return true;
+        if (List.of("/api/user/register", "/api/doctor/list", "/api/doctor/departments", "/api/doctor/full-register").contains(path)) return true;
+        return "POST".equals(request.getMethod())
+                && List.of("/api/ai/payments/notify/wechat", "/api/ai/payments/notify/alipay").contains(path);
     }
 }

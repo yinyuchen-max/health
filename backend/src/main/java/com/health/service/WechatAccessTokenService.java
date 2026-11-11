@@ -34,7 +34,9 @@ public class WechatAccessTokenService {
 
     public WechatAccessTokenService(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
         this.redisTemplate = redisTemplate;
-        this.restTemplate = new RestTemplate();
+        var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(5000); factory.setReadTimeout(10000);
+        this.restTemplate = new RestTemplate(factory);
         this.objectMapper = objectMapper;
     }
 
@@ -42,6 +44,7 @@ public class WechatAccessTokenService {
      * 获取 access_token（优先从 Redis 缓存读取）
      */
     public String getAccessToken() {
+        if (appId == null || appId.isBlank() || "--".equals(appId) || appSecret == null || appSecret.isBlank()) return null;
         // 1. 尝试从 Redis 读取
         String cached = redisTemplate.opsForValue().get(REDIS_KEY);
         if (cached != null && !cached.isBlank()) {
@@ -56,7 +59,6 @@ public class WechatAccessTokenService {
         try {
             // 微信 API 返回 text/plain，先用 String 接收再解析
             String responseStr = restTemplate.getForObject(url, String.class);
-            log.info("获取 access_token 响应：{}", responseStr);
             
             if (responseStr == null || responseStr.isBlank()) {
                 log.error("获取微信 access_token 失败：响应为空");
@@ -82,7 +84,7 @@ public class WechatAccessTokenService {
                 return accessToken;
             }
         } catch (Exception e) {
-            log.error("获取微信 access_token 异常：{}", e.getMessage(), e);
+            log.error("获取微信 access_token 失败");
         }
 
         return null;

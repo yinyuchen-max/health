@@ -1,3 +1,6 @@
+const { get, put } = require('../../utils/request')
+const { sleepMinutes } = require('../../utils/ai-assistant')
+
 Page({
   data: {
     selectedDate: '',
@@ -29,14 +32,19 @@ Page({
     this.loadSleepData()
   },
 
-  loadSleepData() {
+  async loadSleepData() {
     try {
       const app = getApp()
       const userId = app.globalData.userInfo?.id
       const key = `sleep_${userId}_${this.data.selectedDate}`
       const stored = wx.getStorageSync(key)
-      if (stored) {
-        this.setData(stored)
+      if (stored) this.setData(stored)
+      const rows = await get('/api/lifestyle/sleep', { limit: 14 }, { showLoading: false, showError: false })
+      const match = (rows || []).find(item => item.date === this.data.selectedDate)
+      if (match) {
+        const patch = this.fromServer(match)
+        this.setData(patch)
+        wx.setStorageSync(key, { ...this.data, ...patch })
       }
     } catch (err) {
       console.error('加载睡眠数据失败:', err)
@@ -68,15 +76,43 @@ Page({
     this.setData({ sleepQuality: e.currentTarget.dataset.quality })
   },
 
-  saveSleep() {
+  fromServer(match) {
+    const split = (total) => ({ hours: Math.floor((total || 0) / 60), minutes: (total || 0) % 60 })
+    const sleep = split(match.sleepMinutes)
+    const deep = split(match.deepMinutes)
+    const light = split(match.lightMinutes)
+    const rem = split(match.remMinutes)
+    return {
+      bedTime: match.bedTime, wakeTime: match.wakeTime, sleepQuality: match.quality,
+      sleepHours: sleep.hours, sleepMinutes: sleep.minutes,
+      deepHours: deep.hours, deepMinutes: deep.minutes,
+      lightHours: light.hours, lightMinutes: light.minutes,
+      remHours: rem.hours, remMinutes: rem.minutes
+    }
+  },
+
+  async saveSleep() {
+    const data = this.data
+    const minutes = sleepMinutes(data.bedTime, data.wakeTime)
+    const stage = (hours, mins) => Number(hours || 0) * 60 + Number(mins || 0)
+    let deepMinutes = stage(data.deepHours, data.deepMinutes)
+    let lightMinutes = stage(data.lightHours, data.lightMinutes)
+    let remMinutes = stage(data.remHours, data.remMinutes)
+    if (deepMinutes + lightMinutes + remMinutes > minutes) {
+      deepMinutes = null
+      lightMinutes = null
+      remMinutes = null
+    }
     try {
+      await put('/api/lifestyle/sleep', {
+        date: data.selectedDate, bedTime: data.bedTime, wakeTime: data.wakeTime,
+        sleepMinutes: minutes, quality: data.sleepQuality, deepMinutes, lightMinutes, remMinutes
+      }, { showLoading: true, showError: false })
       const app = getApp()
-      const userId = app.globalData.userInfo?.id
-      const key = `sleep_${userId}_${this.data.selectedDate}`
-      wx.setStorageSync(key, this.data)
-      wx.showToast({ title: '保存成功', icon: 'success' })
+      wx.setStorageSync(`sleep_${app.globalData.userInfo?.id}_${data.selectedDate}`, data)
+      wx.showToast({ title: '已保存，AI 会用到', icon: 'success' })
     } catch (err) {
-      wx.showToast({ title: '保存失败', icon: 'none' })
+      wx.showToast({ title: err.message || '保存失败', icon: 'none' })
     }
   }
 })

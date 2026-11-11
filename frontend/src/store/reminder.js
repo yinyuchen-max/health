@@ -2,9 +2,19 @@ import { defineStore } from 'pinia'
 import request from '../utils/request'
 import { useUserStore } from './user'
 
+function responseData(response, fallback) {
+  if (response?.code !== 200 && response?.code !== 0) throw new Error(response?.message || fallback)
+  return response.data
+}
+
+function mutationSucceeded(response, fallback) {
+  if (responseData(response, fallback) !== true) throw new Error(response?.message && response.message !== '操作成功' ? response.message : fallback)
+}
+
 export const useReminderStore = defineStore('reminder', {
   state: () => ({
     preferences: [],
+    preferencesUserId: null,
     notifications: [],
     history: [],
     loading: false,
@@ -52,164 +62,65 @@ export const useReminderStore = defineStore('reminder', {
     async fetchPreferences() {
       this.loading = true
       this.error = null
+      const userId = useUserStore().userInfo?.id
+      if (this.preferencesUserId !== userId) this.preferences = []
+      this.preferencesUserId = userId || null
       try {
-        // 从用户store获取用户ID
-        const userStore = useUserStore()
-        const userId = userStore.userInfo?.id || 1
-
-        const response = await request.get('/reminder/preferences', {
-          params: { userId }
-        })
-        this.preferences = response?.data || []
-      } catch (error) {
-        console.error('获取提醒偏好失败:', error)
-
-        // 如果 API 请求失败，尝试从 localStorage 读取
-        try {
-          const existingData = localStorage.getItem('reminderPreferences')
-          if (existingData) {
-            const allPreferences = JSON.parse(existingData)
-            // 过滤出当前用户的提醒
-            this.preferences = allPreferences.filter(p => p.userId === userId)
-          } else {
-            // 如果没有本地数据，使用默认数据
-            this.preferences = [
-              {
-                id: 1,
-                userId: userId,
-                type: 'bloodPressure',
-                time: '08:00',
-                frequency: 'daily',
-                enabled: true,
-                smartMode: false,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              }
-            ]
-          }
-          this.error = null
-        } catch (localError) {
-          console.error('读取本地存储失败:', localError)
-          this.error = '获取提醒设置失败，请检查网络连接'
-          this.preferences = []
+        if (!userId) throw new Error('用户信息未就绪，请稍后重试')
+        const response = await request.get('/reminder/preferences', { params: { userId } })
+        const preferences = responseData(response, '加载提醒失败，请稍后重试')
+        if (!Array.isArray(preferences) || preferences.some(item => !item || typeof item !== 'object' || item.id == null)) {
+          throw new Error('提醒列表返回异常，请稍后重试')
         }
-      } finally {
-        this.loading = false
-      }
+        if (useUserStore().userInfo?.id !== userId) return false
+        this.preferences = preferences
+        return true
+      } catch (error) {
+        if (useUserStore().userInfo?.id === userId) this.error = error.message || '加载提醒失败，请检查网络连接'
+        return false
+      } finally { this.loading = false }
     },
 
     async savePreference(preference) {
       this.loading = true
       this.error = null
+      const userId = useUserStore().userInfo?.id
       try {
-        let response
-
-        if (preference.id) {
-          // 更新现有提醒
-          response = await request.put(`/reminder/preferences/${preference.id}`, preference)
-        } else {
-          // 创建新提醒
-          console.log('发送保存请求，数据:', preference)
-          response = await request.post('/reminder/preferences', preference)
+        if (!userId) throw new Error('用户信息未就绪，请稍后重试')
+        const payload = {
+          userId, type: preference.type, time: preference.time, frequency: preference.frequency,
+          smartMode: !!preference.smartMode, enabled: preference.enabled !== false
         }
-
-        console.log('保存提醒响应:', response)
-        console.log('响应类型:', typeof response)
-        console.log('响应包含code:', response && 'code' in response)
-
-        if (response && response.code === 200) {
-          // 更新本地状态
-          const index = this.preferences.findIndex(p => p.id === preference.id)
-          if (index !== -1 && response.data) {
-            this.preferences[index] = response.data
-          } else if (response.data) {
-            this.preferences.push(response.data)
-          } else {
-            // 如果没有返回数据，使用本地数据
-            this.preferences.push(preference)
-          }
-          return true
-        } else {
-          this.error = response?.message || '保存失败'
-          return false
-        }
+        const response = preference.id != null
+          ? await request.put(`/reminder/preferences/${preference.id}`, payload)
+          : await request.post('/reminder/preferences', payload)
+        mutationSucceeded(response, '保存提醒失败，请稍后重试')
+        if (useUserStore().userInfo?.id !== userId) return false
+        // 保存接口只返回 Boolean。重新查询服务端，取得真正的提醒 ID 和完整列表。
+        if (!await this.fetchPreferences()) this.error = '提醒已保存，但列表刷新失败，请点击刷新列表重试'
+        return true
       } catch (error) {
-        console.error('保存提醒偏好失败:', error)
-
-        // 保存到 localStorage 作为备用
-        try {
-          if (!preference.id) {
-            preference.id = Date.now()
-          }
-
-          // 从 localStorage 读取现有数据
-          const existingData = localStorage.getItem('reminderPreferences')
-          let allPreferences = existingData ? JSON.parse(existingData) : []
-
-          // 添加或更新这个提醒
-          const index = allPreferences.findIndex(p => p.id === preference.id)
-          if (index !== -1) {
-            allPreferences[index] = preference
-          } else {
-            allPreferences.push(preference)
-          }
-
-          // 保存回 localStorage
-          localStorage.setItem('reminderPreferences', JSON.stringify(allPreferences))
-
-          // 更新内存中的数据
-          this.preferences = allPreferences
-
-          this.error = null
-          return true
-        } catch (localError) {
-          console.error('本地存储失败:', localError)
-          this.error = '保存失败，请稍后重试'
-          return false
-        }
-      } finally {
-        this.loading = false
-      }
+        if (useUserStore().userInfo?.id === userId) this.error = error.message || '保存提醒失败，请检查网络连接'
+        return false
+      } finally { this.loading = false }
     },
 
     async deletePreference(id) {
-      if (!id || id === 'undefined') {
-        console.warn('删除提醒: id 无效, 跳过')
-        return false
-      }
+      if (id == null || id === '' || id === 'undefined') return false
       this.loading = true
       this.error = null
+      const userId = useUserStore().userInfo?.id
       try {
+        if (!userId) throw new Error('用户信息未就绪，请稍后重试')
         const response = await request.delete(`/reminder/preferences/${id}`)
-
-        if (response && (response.code === 200 || response.success)) {
-          this.preferences = this.preferences.filter(p => p.id !== id)
-          return true
-        } else {
-          this.error = response?.message || '删除失败'
-          return false
-        }
+        mutationSucceeded(response, '删除提醒失败，请稍后重试')
+        if (useUserStore().userInfo?.id !== userId) return false
+        this.preferences = this.preferences.filter(item => String(item.id) !== String(id))
+        return true
       } catch (error) {
-        console.error('删除提醒偏好失败:', error)
-
-        // 从 localStorage 删除
-        try {
-          const existingData = localStorage.getItem('reminderPreferences')
-          if (existingData) {
-            let allPreferences = JSON.parse(existingData)
-            allPreferences = allPreferences.filter(p => p.id !== id)
-            localStorage.setItem('reminderPreferences', JSON.stringify(allPreferences))
-            this.preferences = this.preferences.filter(p => p.id !== id)
-          }
-          return true
-        } catch (localError) {
-          console.error('本地删除失败:', localError)
-          this.error = '删除失败，请稍后重试'
-          return false
-        }
-      } finally {
-        this.loading = false
-      }
+        if (useUserStore().userInfo?.id === userId) this.error = error.message || '删除提醒失败，请检查网络连接'
+        return false
+      } finally { this.loading = false }
     },
 
     async toggleReminder(id, enabled) {
@@ -217,12 +128,11 @@ export const useReminderStore = defineStore('reminder', {
       if (!preference) return false
 
       this.loading = true
+      this.error = null
       try {
-        const response = await request.put(`/reminder/preferences/${id}/toggle`, {
-          enabled: enabled
-        })
+        const response = await request.put(`/reminder/preferences/${id}/toggle`, enabled)
 
-        if (response.success) {
+        if ((response.code === 200 || response.code === 0) && response.data === true) {
           preference.enabled = enabled
           return true
         } else {
@@ -287,7 +197,8 @@ export const useReminderStore = defineStore('reminder', {
       this.loading = true
       try {
         const userStore = useUserStore()
-        const userId = userStore.userInfo?.id || 1
+        const userId = userStore.userInfo?.id
+        if (!userId) return []
         const response = await request.get('/reminder/smart-recommendations', {
           params: { userId }
         })

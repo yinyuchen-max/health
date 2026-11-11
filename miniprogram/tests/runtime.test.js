@@ -38,3 +38,33 @@ test('invalid public runtime configuration is rejected before requests are sent'
     }), /必须为正数毫秒/)
   }
 })
+
+test('application boots using only JavaScript modules supported by the mini program loader', () => {
+  const root = path.resolve(__dirname, '..')
+  const modules = new Map()
+  let app
+  const sandbox = {
+    App: value => { app = value },
+    wx: {
+      getAccountInfoSync: () => ({ miniProgram: { envVersion: 'develop' } }),
+      getDeviceInfo: () => ({ platform: 'devtools' })
+    }
+  }
+  function loadModule(filename) {
+    if (modules.has(filename)) return modules.get(filename).exports
+    const module = { exports: {} }
+    modules.set(filename, module)
+    const source = fs.readFileSync(filename, 'utf8')
+    const execute = vm.runInNewContext(`(function(require, module, exports) {\n${source}\n})`, sandbox)
+    execute(request => {
+      assert.equal(request.startsWith('.'), true, 'startup modules must be local')
+      assert.equal(path.extname(request) === '' || path.extname(request) === '.js', true, `unsupported module: ${request}`)
+      return loadModule(path.resolve(path.dirname(filename), request + (path.extname(request) ? '' : '.js')))
+    }, module, module.exports)
+    return module.exports
+  }
+  loadModule(path.join(root, 'app.js'))
+  assert.equal(typeof app.onLaunch, 'function')
+  assert.equal(app.globalData.baseUrl, 'http://localhost:8080')
+  assert.equal(loadModule(path.join(root, 'config/runtime.js')).requestTimeoutMs, 15000)
+})

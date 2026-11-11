@@ -22,6 +22,7 @@ const routes = [
   {
     path: '/doctor',
     component: () => import('../components/DoctorLayout.vue'),
+    meta: { requiresAuth: true, requiresDoctor: true },
     children: [
       {
         path: 'dashboard',
@@ -107,7 +108,7 @@ const routes = [
         component: () => import('../views/SmartHealth.vue'),
         meta: { requiresAuth: true }
       },
-      { path: 'ai-settings', name: 'AiSettings', component: () => import('../views/AiSettings.vue'), meta: { requiresAuth: true } },
+      { path: 'ai-settings', redirect: { name: 'AiChat' } },
       {
         path: 'ai-chat',
         name: 'AiChat',
@@ -175,6 +176,13 @@ router.beforeEach(async to => {
       user.setUserInfo(response.data)
     } catch { return '/app/dashboard' }
     if (user.userInfo.role !== 'admin') return '/app/dashboard'
+  }
+  if (to.matched.some(record => record.meta.requiresDoctor)) {
+    try {
+      const { default: request } = await import('../utils/request')
+      const response = await request.get('/doctor/check')
+      if (response?.data !== true) return '/app/dashboard'
+    } catch { return '/app/dashboard' }
   }
   if ((to.path === '/' || to.path === '/register') && user.token) return '/app/dashboard'
 })

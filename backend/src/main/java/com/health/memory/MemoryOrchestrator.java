@@ -19,14 +19,23 @@ public class MemoryOrchestrator {
         this.users=users;this.cognitive=cognitive;this.retrieval=retrieval;this.working=working;this.transactions=transactions;
     }
     public LongTermMemoryService.Snapshot beforeReply(Long user,String query) {
+        LongTermMemoryService.Snapshot snapshot;
         try {
-            var snapshot=transactions.execute(tx->{
+            snapshot=transactions.execute(tx->{
                 var state=users.lock(user);users.advanceTurn(user);
                 return new LongTermMemoryService.Snapshot(user,state.enabled(),state.revision(),state.nextTurn()+1,
                         state.enabled()?users.list(user,LocalDateTime.now()):List.of(),null,null);
             });
-            if(!snapshot.enabled()) return snapshot;
-            var recall=retrieval.retrieve(user,query,cognitive.profile(user),LocalDateTime.now());
+        } catch(Exception e) { failed("读取",user,e);return null; }
+        if(snapshot==null || !snapshot.enabled()) return snapshot;
+        AssociativeRetriever.Recall recall;
+        try { recall=retrieval.retrieve(user,query,cognitive.profile(user),LocalDateTime.now()); }
+        catch(Exception e) {
+            // A retrieval failure must not take down the health chat. The turn can continue without recalled facts.
+            failed("读取",user,e);
+            return new LongTermMemoryService.Snapshot(user,true,snapshot.revision(),snapshot.turn(),snapshot.memories(),null,null,snapshot.observedAt());
+        }
+        try {
             return transactions.execute(tx->{
                 var current=users.lock(user);
                 if(!current.enabled()||current.revision()!=snapshot.revision()) return null;

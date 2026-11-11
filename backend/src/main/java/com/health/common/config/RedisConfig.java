@@ -92,7 +92,8 @@ public class RedisConfig {
         // 用户信息缓存 30 分钟
         cacheConfigurations.put("user:info", defaultConfig.entryTtl(Duration.ofMinutes(30)));
         // 提醒偏好缓存 1 小时
-        cacheConfigurations.put("reminder:pref", defaultConfig.entryTtl(Duration.ofHours(1)));
+        // 新空间避开旧版不可反序列化的列表缓存。
+        cacheConfigurations.put("reminder:pref:v2", defaultConfig.entryTtl(Duration.ofHours(1)));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)

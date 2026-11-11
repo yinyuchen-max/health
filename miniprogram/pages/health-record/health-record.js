@@ -145,9 +145,30 @@ Page({
       this.loadRecords()
     } catch (err) {
       console.error('保存失败:', err)
-      wx.showToast({ title: err.message || '保存失败', icon: 'none' })
-      // 冲突后保留编辑内容及旧版本，刷新列表供用户重新选择最新记录。
-      if (err.status === 409) await this.loadRecords()
+      if (err.status === 409) {
+        await this.loadRecords()
+        const latest = this.data.records.find(r => r.id === editingId)
+        if (!latest) {
+          this.closeForm()
+          wx.showToast({ title: '记录已删除，请重新选择', icon: 'none' })
+        } else {
+          this.setData({
+            editingVersion: latest.version,
+            form: {
+              recordDate: latest.recordDate || '',
+              bloodPressureSystolic: latest.bloodPressureSystolic || '',
+              bloodPressureDiastolic: latest.bloodPressureDiastolic || '',
+              heartRate: latest.heartRate || '',
+              bloodSugar: latest.bloodSugar || '',
+              weight: latest.weight || '',
+              notes: latest.notes || ''
+            }
+          })
+          wx.showToast({ title: '记录已更新，已载入最新内容', icon: 'none' })
+        }
+      } else {
+        wx.showToast({ title: err.message || '保存失败', icon: 'none' })
+      }
     } finally {
       this.setData({ saving: false })
     }

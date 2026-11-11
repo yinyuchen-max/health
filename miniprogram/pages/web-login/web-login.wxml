@@ -1,0 +1,22 @@
+<view class="web-login-page">
+  <view class="confirm-card">
+    <text class="badge">健康生活 · 网页端</text>
+    <text class="title">{{done ? '已确认登录' : cancelled ? '已取消登录' : '确认登录网页端'}}</text>
+    <block wx:if="{{valid && !done && !cancelled}}">
+      <text class="description">请确认二维码来自你正在使用的健康管理网页。首次微信登录会自动注册，并与小程序共用健康记录。</text>
+      <button class="avatar-picker" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar" disabled="{{loading}}">
+        <image wx:if="{{avatarPath}}" src="{{avatarPath}}" mode="aspectFill" />
+        <text wx:else>选择微信头像（可选）</text>
+      </button>
+      <input class="nickname" type="nickname" maxlength="64" placeholder="填写微信昵称（可选）" value="{{nickname}}" bindinput="onNickname" bindblur="onNickname" disabled="{{loading}}" />
+      <text class="hint">所选昵称和头像将保存到账号，并同步显示在网页端。</text>
+      <view class="sync-option"><text>同时授权同步微信运动</text><switch checked="{{syncSteps}}" bindchange="onSyncChange" color="#16a36a" disabled="{{loading}}" /></view>
+      <text class="hint">步数授权可跳过，之后可在运动记录页同步。</text>
+      <button class="confirm" bindtap="confirm" loading="{{loading}}" disabled="{{loading}}">微信登录并确认</button>
+      <button class="cancel" bindtap="cancel" disabled="{{loading}}">取消</button>
+    </block>
+    <text wx:if="{{!valid}}" class="description">二维码无效，请在网页刷新二维码后重新扫码。</text>
+    <text wx:if="{{message}}" class="message" role="alert">{{message}}</text>
+    <button wx:if="{{done}}" class="confirm" bindtap="goHome">进入小程序</button>
+  </view>
+</view>

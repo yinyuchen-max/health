@@ -165,6 +165,8 @@ wechat:
   miniapp:
     app-id: ${WECHAT_APP_ID:--}
     app-secret: "${WECHAT_APP_SECRET:}"
+    # release 要先发布 pages/web-login/web-login；联调可设 trial 或 develop
+    web-login-env: ${WECHAT_WEB_LOGIN_ENV:release}
     # 订阅消息模板 ID（在小程序后台配置后填入）
     subscribe-template-id: ${WECHAT_SUBSCRIBE_TEMPLATE_ID:}
 

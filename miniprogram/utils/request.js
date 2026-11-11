@@ -105,29 +105,40 @@ function streamRequest(options = {}) {
   const fullUrl = url.startsWith('http') ? url : `${app.globalData.baseUrl}${url}`
   let task
   let cancelled = false
+  let generation = 0
   let buffer = ''
+  let utf8 = createUtf8Stream()
   const send = (token, retried = false) => {
     if (cancelled) return
-    task = wx.request({
+    const mine = ++generation
+    const current = wx.request({
       url: fullUrl, method: 'POST', data,
       header: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       enableChunked: true, timeout: runtime.streamTimeoutMs,
       async success(res) {
-        if (cancelled) return
+        if (cancelled || mine !== generation) return
         if (res.statusCode === 401 && !retried && app.ensureAccess) {
           try {
             const renewed = await app.ensureAccess(true, token)
-            if (renewed) { buffer = ''; send(renewed, true); return }
+            if (cancelled || mine !== generation) return
+            if (renewed) {
+              buffer = ''
+              utf8 = createUtf8Stream()
+              send(renewed, true)
+              try { current.abort() } catch (error) {}
+              return
+            }
           } catch (error) { onError?.(error); return }
         }
         if (res.statusCode >= 400) { onError?.({ message: res.statusCode === 401 ? '请重新登录' : res.statusCode === 402 ? '请前往 AI 服务页面开通或续费' : '请求失败', status: res.statusCode }); return }
         onDone?.()
       },
-      fail(error) { if (!cancelled) onError?.(error) }
+      fail(error) { if (!cancelled && mine === generation) onError?.(error) }
     })
-    task.onChunkReceived(res => {
-      if (cancelled) return
-      buffer += arrayBufferToString(res.data)
+    task = current
+    current.onChunkReceived(res => {
+      if (cancelled || mine !== generation) return
+      buffer += utf8.push(res.data)
       // Deliver only SSE frames, never authentication-error JSON.
       let end
       while ((end = buffer.indexOf('\n\n')) !== -1) {
@@ -139,31 +150,41 @@ function streamRequest(options = {}) {
   }
   if (app.ensureAccess) app.ensureAccess().then(token => send(token)).catch(error => onError?.(error))
   else send(app.globalData.token)
-  return { abort() { cancelled = true; task?.abort() } }
+  return { abort() { cancelled = true; generation += 1; task?.abort() } }
 }
 
-/**
- * ArrayBuffer 转 UTF-8 字符串
- */
-function arrayBufferToString(buffer) {
-  const uint8Array = new Uint8Array(buffer)
-  let result = ''
-  // 使用 TextDecoder 解码 UTF-8
-  if (typeof TextDecoder !== 'undefined') {
-    const decoder = new TextDecoder('utf-8')
-    result = decoder.decode(uint8Array)
-  } else {
-    // 降级：手动解码 UTF-8
-    for (let i = 0; i < uint8Array.length; i++) {
-      result += String.fromCharCode(uint8Array[i])
-    }
-    try {
-      result = decodeURIComponent(escape(result))
-    } catch (e) {
-      // 忽略解码错误
+/** Keep incomplete UTF-8 sequences for the next chunk. A fresh TextDecoder would replace them. */
+function createUtf8Stream() {
+  let pending = new Uint8Array(0)
+  return {
+    push(buffer) {
+      const chunk = new Uint8Array(buffer)
+      const merged = new Uint8Array(pending.length + chunk.length)
+      merged.set(pending)
+      merged.set(chunk, pending.length)
+      let end = merged.length
+      let index = end - 1
+      while (index >= 0 && index > end - 4 && (merged[index] & 0xc0) === 0x80) index -= 1
+      if (index >= 0 && index < end) {
+        const lead = merged[index]
+        let need = 1
+        if ((lead & 0xe0) === 0xc0) need = 2
+        else if ((lead & 0xf0) === 0xe0) need = 3
+        else if ((lead & 0xf8) === 0xf0) need = 4
+        if (index + need > end) end = index
+      }
+      pending = merged.slice(end)
+      return decodeUtf8(merged.subarray(0, end))
     }
   }
-  return result
+}
+
+function decodeUtf8(bytes) {
+  if (!bytes.length) return ''
+  if (typeof TextDecoder !== 'undefined') return new TextDecoder('utf-8').decode(bytes)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  try { return decodeURIComponent(escape(binary)) } catch (error) { return binary }
 }
 
 // 便捷方法

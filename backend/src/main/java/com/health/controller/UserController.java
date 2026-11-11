@@ -14,6 +14,7 @@ import com.health.domain.vo.UserVO;
 import com.health.service.TokenBlacklistService;
 import com.health.service.UserService;
 import com.health.service.WechatAuthService;
+import com.health.service.WechatStepService;
 import com.health.common.utils.JwtUtil;
 import com.health.service.AuthSessionService;
 import com.health.domain.dto.AuthTokens;
@@ -54,6 +55,8 @@ public class UserController {
 
     @Autowired
     private WechatAuthService wechatAuthService;
+
+    @Autowired private WechatStepService wechatStepService;
 
     @Autowired
     private UserMapper userMapper;
@@ -134,13 +137,14 @@ public class UserController {
      * 解密微信运动数据
      */
     @PostMapping("/wechat/decrypt-run-data")
-    public Result<Map<String, Object>> decryptRunData(@RequestBody WechatRunDataDTO dto) {
+    public Result<Map<String, Object>> decryptRunData(@RequestBody @Valid WechatRunDataDTO dto) {
         Long currentUserId = securityUtil.getCurrentUserId();
         User user = userMapper.selectById(currentUserId);
         if (user == null || user.getWechatOpenid() == null) {
             return Result.failed("未绑定微信账号");
         }
         Map<String, Object> data = wechatAuthService.decryptRunData(user.getWechatOpenid(), dto.getEncryptedData(), dto.getIv());
+        wechatStepService.sync(currentUserId, data);
         return Result.success(data);
     }
 

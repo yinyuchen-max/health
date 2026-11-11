@@ -20,6 +20,7 @@ public class AiEngine {
     private String chatSystem(AiRequest r) {
         Map<String,String> vars=new HashMap<>(r.variables());
         vars.putIfAbsent("longTermMemories", "暂无长期记忆");
+        vars.putIfAbsent("dailyContext", "暂无微信步数、睡眠记录、每日目标和提醒。");
         return prompts.render("chat-system",Map.of())+"\n\n"+prompts.render("chat-user-context",vars)
                 +"\n\n"+prompts.render("memory-context",vars)
                 +(vars.getOrDefault("archiveEvidence","").isBlank()?"":"\n\n"+prompts.render("chat-archive-context",vars));
@@ -44,6 +45,7 @@ public class AiEngine {
                 messages.add(UserMessage.from(r.message()));
             }
             case "report" -> {
+                vars.putIfAbsent("dailyContext", "暂无微信步数、睡眠记录、每日目标和提醒。");
                 vars.put("retrievedKnowledge",knowledge.retrieve(r,String.join(" ",vars.values())));
                 messages.add(SystemMessage.from(prompts.render("health-report-system",Map.of())));
                 messages.add(UserMessage.from(prompts.render("health-report-user",vars)));

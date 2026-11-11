@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.health.common.config.GlobalExceptionHandler;
 import com.health.common.utils.SecurityUtil;
 import com.health.controller.ChatController;
+import com.health.memory.LongTermMemoryService;
+import com.health.service.ChatFeedbackService;
 import com.health.service.ChatService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -30,7 +32,7 @@ class AiEntitlementBoundaryTest {
         var service=mock(ChatService.class); var security=mock(SecurityUtil.class); when(security.getCurrentUserId()).thenReturn(1L);
         when(service.chat(anyString(),eq(1L))).thenThrow(new AiPaymentRequiredException());
         doThrow(new AiPaymentRequiredException()).when(service).chatStream(anyString(),eq(1L),any());
-        var mvc=MockMvcBuilders.standaloneSetup(new ChatController(service,security)).setControllerAdvice(new GlobalExceptionHandler()).build();
+        var mvc=MockMvcBuilders.standaloneSetup(new ChatController(service,security,mock(LongTermMemoryService.class),mock(ChatFeedbackService.class))).setControllerAdvice(new GlobalExceptionHandler()).build();
         for(String path:List.of("/api/chat/send","/api/chat/send/stream"))
             mvc.perform(post(path).accept(path.endsWith("stream") ? "text/event-stream" : "application/json")
                             .contentType("application/json").content("{\"message\":\"hello\",\"userId\":2}"))

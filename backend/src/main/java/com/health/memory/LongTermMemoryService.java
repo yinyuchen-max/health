@@ -5,6 +5,8 @@ import com.health.service.impl.RedisChatMemoryStore;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 /** Backward-compatible management facade; the orchestrator owns the online lifecycle. */
@@ -44,6 +46,7 @@ public class LongTermMemoryService {
         return snapshot==null||!snapshot.enabled()?"长期记忆未启用或暂不可用":snapshot.recalledContext()==null?"暂无相关长期记忆":snapshot.recalledContext();
     }
     public void completeTurn(Snapshot snapshot,String message,Runnable saveHistory) { orchestrator.afterReply(snapshot,message,saveHistory); }
+    public List<ChatTranscriptRepository.Message> history(Long user) { return transcript.recent(user, 80); }
     public View view(Long user) {
         return transactions.execute(tx->{var state=repository.lock(user);return new View(state.enabled(),repository.list(user,LocalDateTime.now()));});
     }
@@ -65,7 +68,9 @@ public class LongTermMemoryService {
     public void edit(Long user,Long id,String content) {
         if(content==null||content.isBlank()||content.length()>500) throw new BusinessException("记忆内容须为 1 到 500 个字符");
         transactions.executeWithoutResult(tx->{
-            var state=repository.lock(user);requireFact(user,id);invalidate(user,true);
+            var state=repository.lock(user);
+            var fact=requireFact(user,id);
+            redactChat(user,snippets(user,fact));
             semantics.confirm(user,id,content.trim(),state.nextTurn());
         });
     }
@@ -76,16 +81,39 @@ public class LongTermMemoryService {
         });
     }
     public void delete(Long user,Long id) {
-        transactions.executeWithoutResult(tx->{repository.lock(user);requireFact(user,id);invalidate(user,true);semantics.forget(user,id);});
+        transactions.executeWithoutResult(tx->{
+            repository.lock(user);
+            var fact=requireFact(user,id);
+            redactChat(user,snippets(user,fact));
+            semantics.forget(user,id);
+        });
     }
     public void forgetKeys(Long user,List<String> keys) {
-        transactions.executeWithoutResult(tx->{repository.lock(user);invalidate(user,true);for(String key:keys) semantics.forgetKey(user,key);});
+        transactions.executeWithoutResult(tx->{
+            repository.lock(user);
+            var snippets=new ArrayList<String>();
+            for(String key:keys) {
+                var fact=cognitive.fact(user,key);
+                if(fact!=null) snippets.addAll(snippets(user,fact));
+                else for(var episode:cognitive.factEpisodes(user,key)) addSnippet(snippets,episode);
+            }
+            redactChat(user,snippets);
+            for(String key:keys) semantics.forgetKey(user,key);
+        });
     }
     public void deleteEpisode(Long user,String id) {
         transactions.executeWithoutResult(tx->{
             var state=repository.lock(user);
-            if(cognitive.episode(user,id)==null) throw new BusinessException("事件不存在");
-            invalidate(user,true);semantics.forgetEpisode(user,id);
+            var event=cognitive.episode(user,id);
+            if(event==null) throw new BusinessException("事件不存在");
+            var snippets=new ArrayList<String>();
+            addSnippet(snippets,event);
+            for(Long dependent:cognitive.dependents(user,id)) {
+                var fact=cognitive.semantic(user,dependent);
+                if(fact!=null) snippets.addAll(snippets(user,fact));
+            }
+            redactChat(user,snippets);
+            semantics.forgetEpisode(user,id);
             if(state.enabled()) {
                 repository.advanceTurn(user);
                 cognitive.enqueue(user,state.revision()+1,state.nextTurn()+1,"CONSOLIDATE","");
@@ -98,9 +126,30 @@ public class LongTermMemoryService {
     public void feedback(Long user,String retrievalId,String feedback) {
         transactions.executeWithoutResult(tx->{repository.lock(user);adaptive.feedback(user,retrievalId,feedback);});
     }
-    private void requireFact(Long user,Long id) { if(cognitive.semantic(user,id)==null) throw new BusinessException("记忆不存在"); }
+    private CognitiveMemoryRepository.Semantic requireFact(Long user,Long id) {
+        var fact=cognitive.semantic(user,id);
+        if(fact==null) throw new BusinessException("记忆不存在");
+        return fact;
+    }
     private void invalidate(Long user,boolean clearRecent) {
         if(clearRecent) { chatMemory.clearStrict(user);working.clearStrict(user);transcript.clear(user); }
         repository.invalidate(user);cognitive.cancelJobs(user);cognitive.clearRetrievals(user);
+    }
+    /** Hide quoted evidence and drop the live summary. Unrelated archived turns remain available. */
+    private void redactChat(Long user,List<String> snippets) {
+        chatMemory.clearStrict(user);working.clearStrict(user);transcript.redact(user,snippets);
+        repository.invalidate(user);cognitive.cancelJobs(user);cognitive.clearRetrievals(user);
+    }
+    private List<String> snippets(Long user,CognitiveMemoryRepository.Semantic fact) {
+        var snippets=new ArrayList<String>();
+        addText(snippets,fact.content());addText(snippets,fact.sourceText());addText(snippets,fact.pendingContent());
+        for(var episode:cognitive.factEpisodes(user,fact.factKey())) addSnippet(snippets,episode);
+        return List.copyOf(new LinkedHashSet<>(snippets));
+    }
+    private static void addSnippet(List<String> snippets,CognitiveMemoryRepository.Episode episode) {
+        addText(snippets,episode.content());addText(snippets,episode.evidence());addText(snippets,episode.goal());addText(snippets,episode.timeEvidence());
+    }
+    private static void addText(List<String> snippets,String value) {
+        if(value!=null && value.trim().length()>=2) snippets.add(value.trim());
     }
 }

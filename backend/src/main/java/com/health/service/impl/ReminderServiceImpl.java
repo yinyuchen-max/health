@@ -16,7 +16,9 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, ReminderPreference> implements ReminderService {
@@ -30,7 +32,7 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
     }
 
     @Override
-    @Cacheable(value = "reminder:pref", key = "#userId")
+    @Cacheable(value = "reminder:pref:v2", key = "#userId")
     public List<ReminderPreferenceVO> getPreferencesByUserId(Long userId) {
         QueryWrapper<ReminderPreference> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("user_id", userId)
@@ -39,23 +41,23 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
 
         return list(queryWrapper).stream()
                 .map(this::convertToVO)
-                .toList();
+                // Redis 的 NON_FINAL 类型信息要求使用可还原的集合，Stream.toList() 会丢失根类型信息。
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     @Override
-    @CacheEvict(value = "reminder:pref", allEntries = true)
+    @CacheEvict(value = "reminder:pref:v2", allEntries = true)
     public boolean savePreference(ReminderPreferenceDTO dto) {
         try {
             ReminderPreference preference = convertToEntity(dto);
             if (dto.getId() != null) {
                 preference.setUpdatedAt(LocalDateTime.now());
-                updateById(preference);
+                return updateById(preference);
             } else {
                 preference.setCreatedAt(LocalDateTime.now());
                 preference.setUpdatedAt(LocalDateTime.now());
-                save(preference);
+                return save(preference);
             }
-            return true;
         } catch (Exception e) {
             log.error("Save reminder preference failed", e);
             return false;
@@ -63,16 +65,11 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
     }
 
     @Override
-    @CacheEvict(value = "reminder:pref", allEntries = true)
+    @CacheEvict(value = "reminder:pref:v2", allEntries = true)
     public boolean deletePreference(Long id) {
         try {
-            ReminderPreference preference = getById(id);
-            if (preference == null) {
-                return false;
-            }
-            preference.setDeleted(1);
-            preference.setUpdatedAt(LocalDateTime.now());
-            return updateById(preference);
+            // 使用 MyBatis-Plus 逻辑删除；updateById 会忽略 deleted 字段。
+            return removeById(id);
         } catch (Exception e) {
             log.error("Delete reminder preference failed", e);
             return false;
@@ -80,7 +77,7 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
     }
 
     @Override
-    @CacheEvict(value = "reminder:pref", allEntries = true)
+    @CacheEvict(value = "reminder:pref:v2", allEntries = true)
     public boolean toggleReminder(Long id, Boolean enabled) {
         try {
             ReminderPreference preference = getById(id);
@@ -191,6 +188,8 @@ public class ReminderServiceImpl extends ServiceImpl<ReminderPreferenceMapper, R
             case "bloodSugar" -> "血糖检测";
             case "weight" -> "体重记录";
             case "exercise" -> "运动提醒";
+            case "sleep" -> "睡眠提醒";
+            case "water" -> "饮水提醒";
             default -> type;
         };
     }

@@ -21,6 +21,10 @@ public interface ChatService {
         default void onThinking(String token) {
         }
 
+        /** 本次回复实际读到的个人记录，供界面说明依据。 */
+        default void onContext(String note) {
+        }
+
         /** 收到一个新的文本片段（token） */
         void onToken(String token);
 

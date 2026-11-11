@@ -31,10 +31,14 @@ public class ChatTranscriptRepository {
         jdbc.update("UPDATE chat_context_state SET revision=?,lease_token=NULL,lease_until=NULL WHERE user_id=?",revision,user);
     }
     public Message append(Long user,long revision,String turn,String role,String text,LocalDateTime time) {
+        return append(user,revision,turn,role,text,time,true);
+    }
+    /** Pending user turns stay in the archive but out of model context until the assistant reply is stored. */
+    public Message append(Long user,long revision,String turn,String role,String text,LocalDateTime time,boolean includeInContext) {
         String id=UUID.randomUUID().toString();
         try {
-            jdbc.update("INSERT INTO chat_message_archive(message_id,turn_key,user_id,revision,role,content,recorded_at) VALUES(?,?,?,?,?,?,?)",
-                    id,turn,user,revision,role,text,time==null?null:Timestamp.valueOf(time));
+            jdbc.update("INSERT INTO chat_message_archive(message_id,turn_key,user_id,revision,role,content,recorded_at,include_in_context) VALUES(?,?,?,?,?,?,?,?)",
+                    id,turn,user,revision,role,text,time==null?null:Timestamp.valueOf(time),includeInContext);
         } catch(DuplicateKeyException duplicate) {
             // Completion callbacks are idempotent; conflicting duplicate content is never accepted.
             var existing=jdbc.query("SELECT * FROM chat_message_archive WHERE user_id=? AND turn_key=? AND role=?",MESSAGE,user,turn,role);
@@ -42,6 +46,35 @@ public class ChatTranscriptRepository {
             return existing.get(0);
         }
         return jdbc.queryForObject("SELECT * FROM chat_message_archive WHERE user_id=? AND message_id=?",MESSAGE,user,id);
+    }
+    /**
+     * Move a pending user turn to the end of the log and mark it visible.
+     * Doing this in the same transaction as the assistant reply keeps concurrent turns paired.
+     */
+    public void promote(Long user,String turn) {
+        var rows=jdbc.queryForList("SELECT message_id,revision,content,recorded_at,include_in_context FROM chat_message_archive WHERE user_id=? AND turn_key=? AND role='user'",user,turn);
+        if(rows.isEmpty() || truthy(rows.get(0).get("include_in_context"))) return;
+        var row=rows.get(0);
+        jdbc.update("DELETE FROM chat_message_archive WHERE user_id=? AND turn_key=? AND role='user'",user,turn);
+        jdbc.update("INSERT INTO chat_message_archive(message_id,turn_key,user_id,revision,role,content,recorded_at,include_in_context) VALUES(?,?,?,?,?,?,?,?)",
+                row.get("message_id"),turn,user,((Number)row.get("revision")).longValue(),"user",row.get("content"),row.get("recorded_at"),true);
+    }
+    /** Drop the live summary and hide archive rows that still quote a forgotten fact. Other turns stay. */
+    public void redact(Long user,List<String> snippets) {
+        jdbc.update("UPDATE chat_context_state SET checkpoint_json=NULL,covered_through=0,lease_token=NULL,lease_until=NULL WHERE user_id=?",user);
+        if(snippets==null) return;
+        for(String snippet:snippets) {
+            if(snippet==null) continue;
+            String text=snippet.trim();
+            if(text.length()<2 || text.length()>1000) continue;
+            String pattern="%"+text.replace("!","!!").replace("%","!%").replace("_","!_")+"%";
+            jdbc.update("UPDATE chat_message_archive SET include_in_context=FALSE WHERE user_id=? AND include_in_context=TRUE AND content LIKE ? ESCAPE '!'",user,pattern);
+        }
+    }
+    private static boolean truthy(Object value) {
+        if(value instanceof Boolean flag) return flag;
+        if(value instanceof Number number) return number.intValue()!=0;
+        return false;
     }
     public List<Message> active(Long user,long covered,long before) {
         var result=jdbc.query("SELECT * FROM chat_message_archive WHERE user_id=? AND include_in_context=TRUE AND seq>? AND seq<? ORDER BY seq LIMIT 40001",MESSAGE,user,covered,before);
@@ -88,5 +121,12 @@ public class ChatTranscriptRepository {
         jdbc.update("DELETE FROM chat_compaction_checkpoint WHERE user_id=?",user);
         jdbc.update("DELETE FROM chat_message_archive WHERE user_id=?",user);
         jdbc.update("DELETE FROM chat_context_state WHERE user_id=?",user);
+    }
+    /** Newest messages first, then reversed by the caller. Hidden appointment turns stay visible to the user. */
+    public List<Message> recent(Long user, int limit) {
+        int size = Math.min(Math.max(limit, 1), 80);
+        var rows = jdbc.query("SELECT * FROM chat_message_archive WHERE user_id=? ORDER BY seq DESC LIMIT ?", MESSAGE, user, size);
+        java.util.Collections.reverse(rows);
+        return rows;
     }
 }

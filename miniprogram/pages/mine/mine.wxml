@@ -2,10 +2,11 @@
   <!-- 用户信息卡片 -->
   <view class="user-header">
     <view class="user-avatar-wrap">
-      <text class="user-avatar-text">{{userInitial || '用'}}</text>
+      <image wx:if="{{avatarDisplay}}" src="{{avatarDisplay}}" mode="aspectFill" style="width:100rpx;height:100rpx;border-radius:50rpx" />
+      <text wx:else class="user-avatar-text">{{userInitial || '用'}}</text>
     </view>
     <view class="user-info-wrap">
-      <text class="user-name">{{userInfo.username || '用户'}}</text>
+      <text class="user-name">{{userInfo.nickname || userInfo.username || '用户'}}</text>
       <text class="user-slogan">健康生活，快乐每一天</text>
     </view>
   </view>

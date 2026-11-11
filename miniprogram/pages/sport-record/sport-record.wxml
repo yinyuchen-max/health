@@ -7,7 +7,7 @@
     </view>
     <view class="werun-body">
       <view class="werun-steps-wrap">
-        <text class="werun-steps">{{todaySteps || '--'}}</text>
+        <text class="werun-steps">{{todaySteps === null ? '--' : todaySteps}}</text>
         <text class="werun-unit">步</text>
       </view>
       <text class="werun-icon">🏃</text>
@@ -26,6 +26,7 @@
         <text class="werun-stat-label">运动分钟</text>
       </view>
     </view>
+    <view class="werun-sync-note">{{lastSyncAt ? '最近同步 ' + lastSyncAt : '尚未同步微信运动'}} · 热量和距离为步数估算</view>
   </view>
 
   <!-- 快速添加运动 -->

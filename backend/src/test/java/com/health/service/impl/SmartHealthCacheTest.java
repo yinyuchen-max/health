@@ -12,6 +12,7 @@ import com.health.mapper.SportRecordMapper;
 import com.health.mapper.UserMapper;
 import com.health.ai.AiClient;
 import com.health.ai.AiRequest;
+import com.health.ai.AiPaymentRequiredException;
 
 import com.health.support.RedisMemoryFixture;
 
@@ -91,7 +92,7 @@ class SmartHealthCacheTest {
         health.clear();
         sport.clear();
         // 即使填了个人体征、保留旧缓存和历史副本，也不能凭空生成报告。
-        cache.data.put("smart:overview:v3:1:1", "old cached report");
+        cache.data.put("smart:overview:v4:1:1", "old cached report");
         HistoryRecord oldHistory = new HistoryRecord();
         oldHistory.setContent("old health record");
         history.add(oldHistory);
@@ -109,10 +110,35 @@ class SmartHealthCacheTest {
         assertNull(result.getStressInsight());
         assertTrue(result.getRiskAssessments().isEmpty());
         assertTrue(result.getQuickTips().isEmpty());
+        verifyNoInteractions(model);
+        verifyNoInteractions(historyMapper, cache.redis);
+    }
+
+    @Test
+    void usersWithoutAiAccessStillReceiveTheEmptyDataNotice() {
+        health.clear();
+        sport.clear();
+        doThrow(new AiPaymentRequiredException()).when(model).requireAccess(anyLong());
+
+        var result = service.generateOverview(1L);
+
+        assertEquals("NO_DATA", result.getDataStatus());
+        assertTrue(result.getMessage().contains("请先添加"));
+        verifyNoInteractions(model, historyMapper, cache.redis);
+    }
+
+    @Test
+    void existingRecordsStillRequireAiAccessBeforeReadingAnOldReport() {
+        service.generateOverview(1L);
+        clearInvocations(model, historyMapper, cache.redis, cache.values);
+        doThrow(new AiPaymentRequiredException()).when(model).requireAccess(1L);
+
+        assertThrows(AiPaymentRequiredException.class, () -> service.generateOverview(1L));
+
         verify(model).payer(1L);
         verify(model).requireAccess(1L);
         verifyNoMoreInteractions(model);
-        verifyNoInteractions(historyMapper, cache.redis);
+        verifyNoInteractions(historyMapper, cache.redis, cache.values);
     }
 
     @Test
@@ -143,7 +169,7 @@ class SmartHealthCacheTest {
     @Test
     void unchangedDataShouldReuseOldReportAfterRestartWithoutTtlOrRagCalls() throws Exception {
         service.generateOverview(1L);
-        String key = "smart:overview:v3:1:1";
+        String key = "smart:overview:v4:1:1";
         SmartHealthServiceImpl.CachedOverview entry = json.readValue(cache.data.get(key), SmartHealthServiceImpl.CachedOverview.class);
         entry.overview().setGeneratedAt("2020-01-01T00:00:00");
         cache.data.put(key, json.writeValueAsString(entry));

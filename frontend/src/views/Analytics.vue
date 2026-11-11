@@ -256,6 +256,7 @@ import request from '../utils/request'
 import { useUserStore } from '../store/user'
 import { useAnalyticsStore } from '../store/analytics'
 import HealthDataNotice from '../components/HealthDataNotice.vue'
+import { runtime } from '../config/runtime'
 import {
   DataLine, TrendCharts, Warning, Stopwatch, PieChart,
   Document, ChatDotSquare, Bowl, Moon, Lightning, Refresh
@@ -422,15 +423,30 @@ const resizeCharts = () => { healthMetricsChart?.resize(); riskBarChart?.resize(
 const loadData = async () => {
   refreshing.value = true
   try {
-    const userId = userStore.userInfo?.id || 1
+    const userId = userStore.userInfo?.id
+    if (!userId) { ElMessage.error('用户信息未就绪，请稍后重试'); return }
     await Promise.all([
       analyticsStore.fetchHealthRecords(userId, { pageNum: 1, pageSize: 1000 }),
       analyticsStore.fetchSportRecords(userId, { pageNum: 1, pageSize: 1000 })
     ])
-    const response = await request.get('/smart-health/overview', { params: { userId } })
+    if (!analyticsStore.healthRecords.length && !analyticsStore.sportRecords.length) {
+      overview.value = {
+        dataStatus: 'NO_DATA',
+        overallStatus: '待添加数据',
+        message: '暂无可分析的数据，请先添加健康记录或运动记录。'
+      }
+      await renderCharts()
+      return
+    }
+    const response = await request.get('/smart-health/overview', { params: { userId }, timeout: runtime.smartHealthTimeoutMs })
+    if ((response?.code !== 200 && response?.code !== 0) || !response.data) {
+      throw new Error(response?.message || '加载分析页失败')
+    }
     overview.value = response.data
     await renderCharts()
   } catch (error) {
+    overview.value = null
+    disposeCharts()
     console.error('加载分析页失败', error)
     ElMessage.error('加载分析页失败')
   } finally { refreshing.value = false }

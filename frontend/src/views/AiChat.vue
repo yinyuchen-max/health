@@ -14,7 +14,6 @@
           <p>健康、饮食、运动、睡眠…… 有问题尽管问（也可以说「预约」来预约医生）</p>
         </div>
       </div>
-      <el-button text @click="$router.push('/app/ai-settings')">AI 服务与记忆</el-button>
       <el-button
         v-if="messages.length > 0"
         text
@@ -25,9 +24,7 @@
       </el-button>
     </div>
 
-    <el-alert v-if="accessMessage" :title="accessMessage" type="warning" :closable="false">
-      <el-button text @click="$router.push('/app/ai-settings')">查看 AI 服务与开通状态</el-button>
-    </el-alert>
+    <el-alert v-if="emergency" type="error" :closable="false" title="如果这是正在发生的紧急情况，请立即拨打 120 或就近急诊。这里的回复不能代替急救。" />
     <!-- 消息滚动区 -->
     <div class="chat-scroll" ref="scrollRef">
       <div class="chat-column">
@@ -101,7 +98,10 @@
                 <button class="action-btn" @click="regenerate(idx)">
                   <el-icon :size="13"><Refresh /></el-icon>重新生成
                 </button>
+                <button class="action-btn" @click="rateMessage(msg, 'USEFUL')">有帮助</button>
+                <button class="action-btn" @click="rateMessage(msg, 'INACCURATE')">需要纠正</button>
               </div>
+              <p v-if="msg.contextNote" class="context-note">{{ msg.contextNote }}</p>
               <div v-if="showAppointmentCard(idx)" class="appointment-card">
                 <div class="appt-info">
                   <span class="appt-icon">🏥</span>
@@ -137,12 +137,12 @@
           :autosize="{ minRows: 1, maxRows: 6 }"
           placeholder="输入你的健康问题…"
           resize="none"
-          :disabled="loading || !aiAllowed"
+          :disabled="loading"
           class="chat-textarea"
           @keydown.enter="onEnterKey"
         />
         <div class="input-toolbar">
-          <span class="input-hint">Enter 发送 · Shift+Enter 换行 · 内容由 AI 生成，仅供参考</span>
+          <span class="input-hint">Enter 发送 · Shift+Enter 换行 · 内容由 AI 生成，仅供参考，不能代替医生诊断。胸痛、呼吸困难、严重出血或昏迷请立即拨打 120。</span>
           <div class="input-buttons">
             <el-button
               v-if="loading"
@@ -157,7 +157,7 @@
               v-else
               type="primary"
               round
-              :disabled="!inputText.trim() || !aiAllowed"
+              :disabled="!inputText.trim()"
               @click="handleSend()"
             >
               <el-icon><Promotion /></el-icon>发送
@@ -188,22 +188,34 @@ import request from '../utils/request'
 import { renderMarkdown } from '../utils/markdown'
 import { useUserStore } from '../store/user'
 import { ElMessageBox, ElMessage } from 'element-plus'
+import { clearServerChat, isEmergency, loadChatHistory, mentionsAppointment, sendChatFeedback } from '../utils/ai-assistant'
+
+const MEMBERSHIP_REPLY = '您还未开通会员，暂时无法使用 AI 问答。开通会员后即可继续提问。'
+const UNAVAILABLE_REPLY = 'AI 问答暂时不可用，请稍后再试。'
 
 const userStore = useUserStore()
 const messages = ref([])
 const inputText = ref('')
 const loading = ref(false)
-const aiAllowed = ref(false)
-const accessMessage = ref('正在检查 AI 服务资格…')
+const access = ref(null)
+const emergency = computed(() => messages.value.some(item => item.role === 'user' && isEmergency(item.content)))
 const loadAccess = async () => {
-  aiAllowed.value = false
   try {
     const response = await request.get('/ai/access')
     if (response.code !== 200) throw new Error(response.message || '读取服务状态失败')
-    aiAllowed.value = response.data.allowed && response.data.configured
-    accessMessage.value = !response.data.allowed ? '请先开通 AI 服务；管理员可免费使用。'
-      : !response.data.configured ? '平台 AI 服务暂未配置，请联系管理员。' : ''
-  } catch (e) { accessMessage.value = e.message || '暂时无法读取 AI 服务资格，请刷新页面重试。' }
+    access.value = {
+      allowed: !!response.data.allowed,
+      configured: !!response.data.configured
+    }
+  } catch {
+    access.value = { error: true }
+  }
+}
+const localBlockReply = () => {
+  if (!access.value || access.value.error) return ''
+  if (!access.value.allowed) return MEMBERSHIP_REPLY
+  if (!access.value.configured) return UNAVAILABLE_REPLY
+  return ''
 }
 const scrollRef = ref(null)
 
@@ -223,8 +235,15 @@ const lastAssistantIdx = computed(() => {
   return -1
 })
 
+const previousUserText = (idx) => {
+  for (let i = idx - 1; i >= 0; i -= 1) {
+    if (messages.value[i].role === 'user') return messages.value[i].content
+  }
+  return ''
+}
 const showAppointmentCard = (idx) =>
   idx === lastAssistantIdx.value && !loading.value
+  && (mentionsAppointment(messages.value[idx]?.content) || mentionsAppointment(previousUserText(idx)))
 
 const quickQuestions = [
   { icon: '💧', text: '每天应该喝多少水？' },
@@ -237,16 +256,22 @@ const quickQuestions = [
 /* ---------------- 本地历史 ---------------- */
 const historyKey = () => `ai-chat-history-${userStore.userInfo?.id || 'default'}`
 
-const loadMessages = () => {
+const loadLocalMessages = () => {
   const saved = localStorage.getItem(historyKey())
-  if (saved) {
-    try {
-      messages.value = JSON.parse(saved)
-    } catch (e) {
-      console.error('加载对话历史失败:', e)
-      messages.value = []
+  if (!saved) return
+  try { messages.value = JSON.parse(saved) } catch (e) { console.error('加载对话历史失败:', e) }
+}
+const loadMessages = async () => {
+  try {
+    const remote = await loadChatHistory(request)
+    if (remote.length) {
+      messages.value = remote
+      return
     }
+  } catch (e) {
+    console.error('读取服务器对话失败:', e)
   }
+  loadLocalMessages()
 }
 
 const saveMessages = () => {
@@ -272,14 +297,16 @@ const clearMessages = () => {
 const handleClearHistory = async () => {
   try {
     await ElMessageBox.confirm(
-      '确定要清空所有对话记录吗？此操作不可恢复。',
+      '将删除这段对话，清空后无法恢复。',
       '清空对话',
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
     )
+    await clearServerChat(request)
     clearMessages()
-    ElMessage.success('对话记录已清空')
-  } catch {
-    // 用户取消
+    ElMessage.success('对话已清空')
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(error.message || '清空失败，服务器上的对话还在')
   }
 }
 
@@ -306,6 +333,19 @@ const scheduleScroll = () => {
   })
 }
 
+const rateMessage = async (msg, rating) => {
+  try {
+    await sendChatFeedback(request, rating, msg.content)
+    if (rating === 'INACCURATE') {
+      ElMessage.success('已记下，这条回复需要纠正')
+      return
+    }
+    ElMessage.success('谢谢，已记下这条回复有帮助')
+  } catch (e) {
+    ElMessage.error(e.message || '评价失败')
+  }
+}
+
 const copyMessage = async (msg) => {
   try {
     await navigator.clipboard.writeText(msg.content)
@@ -316,11 +356,25 @@ const copyMessage = async (msg) => {
 }
 
 /* ---------------- 发送与流式接收 ---------------- */
+const pushLocalExchange = async (message, reply) => {
+  inputText.value = ''
+  messages.value.push({ role: 'user', content: message, time: formatTime() })
+  messages.value.push({ role: 'assistant', content: reply, time: formatTime() })
+  saveMessages()
+  await scrollToBottom()
+}
+
 const handleSend = async (text) => {
   const message = (text ?? inputText.value).trim()
   if (!message || loading.value) return
-  if (!aiAllowed.value) { ElMessage.warning(accessMessage.value); return }
+  if (!access.value) await loadAccess()
+  const blocked = localBlockReply()
+  if (blocked) {
+    await pushLocalExchange(message, blocked)
+    return
+  }
 
+  loading.value = true
   inputText.value = ''
   messages.value.push({ role: 'user', content: message, time: formatTime() })
   messages.value.push({ role: 'assistant', content: '', time: formatTime(), streaming: true })
@@ -355,11 +409,11 @@ const onEnterKey = (e) => {
  * 注意：必须通过 messages.value[msgIdx]（响应式代理）更新内容，直接改原始对象不会触发视图更新
  */
 const streamReply = async (userText, msgIdx) => {
-  if (!aiAllowed.value) { ElMessage.warning(accessMessage.value); return }
   abortedByUser = false
   abortController = new AbortController()
   loading.value = true
   let content = ''
+  let streamStarted = false
 
   const setContent = (val) => {
     messages.value[msgIdx].content = val
@@ -377,14 +431,19 @@ const streamReply = async (userText, msgIdx) => {
       signal: abortController.signal
     })
 
-    if (!res.ok || !res.body) {
-      if (res.status === 402) {
-        aiAllowed.value = false
-        accessMessage.value = 'AI 服务未开通或已到期，请前往 AI 服务页面开通。'
-      }
-      const failure = await res.json().catch(() => ({}))
-      throw new Error(failure.message || `HTTP ${res.status}`)
+    if (res.status === 402) {
+      access.value = { allowed: false, configured: true }
+      const error = new Error(MEMBERSHIP_REPLY)
+      error.membership = true
+      throw error
     }
+    if (!res.ok || !res.body) {
+      const failure = await res.json().catch(() => ({}))
+      const error = new Error(failure.message || `HTTP ${res.status}`)
+      error.fallback = true
+      throw error
+    }
+    streamStarted = true
 
     const reader = res.body.getReader()
     const decoder = new TextDecoder('utf-8')
@@ -401,7 +460,9 @@ const streamReply = async (userText, msgIdx) => {
         buffer = buffer.slice(sep + 2)
         const evt = parseSseBlock(block)
         if (!evt) continue
-        if (evt.name === 'thinking') {
+        if (evt.name === 'context') {
+          messages.value[msgIdx].contextNote = evt.data
+        } else if (evt.name === 'thinking') {
           // 推理模型的思考过程
           const msg = messages.value[msgIdx]
           if (!msg.thinkingStart) msg.thinkingStart = Date.now()
@@ -420,26 +481,39 @@ const streamReply = async (userText, msgIdx) => {
           setContent(content)
           return
         } else if (evt.name === 'error') {
-          throw new Error(evt.data || 'AI 服务出错')
+          const error = new Error(evt.data || 'AI 服务出错')
+          error.streamed = true
+          throw error
         }
       }
     }
-    throw new Error('连接意外关闭')
+    const closed = new Error('连接意外关闭')
+    closed.streamed = true
+    throw closed
   } catch (e) {
     if (abortedByUser) {
       setContent(content
         ? `${content}\n\n*（已停止生成）*`
         : '*（已停止生成）*')
-    } else {
-      // 降级：走原有非流式接口
+    } else if (e?.membership) {
+      setContent(MEMBERSHIP_REPLY)
+    } else if (e?.fallback && !streamStarted) {
       setContent('')
       try {
         const res = await request.post('/chat/send', { message: userText })
         const reply = res?.data?.reply || res?.reply
+        messages.value[msgIdx].contextNote = res?.data?.contextNote || ''
         setContent(reply || '抱歉，AI 服务暂时不可用，请稍后重试。')
       } catch (fallbackError) {
-        setContent(content || '抱歉，AI 服务暂时不可用，请稍后重试。')
+        if (fallbackError?.status === 402) {
+          access.value = { allowed: false, configured: true }
+          setContent(MEMBERSHIP_REPLY)
+        } else {
+          setContent(content || '抱歉，AI 服务暂时不可用，请稍后重试。')
+        }
       }
+    } else {
+      setContent(content || e?.message || '抱歉，AI 服务暂时不可用，请稍后重试。')
     }
   } finally {
     // 结束后主动关闭流连接（Vite 代理下服务端关闭可能不传递 EOF）
@@ -485,6 +559,15 @@ const toggleThinking = (idx) => {
 const regenerate = async (idx) => {
   const msg = messages.value[idx]
   if (!msg || msg.role !== 'assistant' || loading.value) return
+  if (!access.value) await loadAccess()
+  const blocked = localBlockReply()
+  if (blocked) {
+    messages.value[idx].content = blocked
+    messages.value[idx].streaming = false
+    messages.value[idx].thinking = undefined
+    saveMessages()
+    return
+  }
 
   let userMsg = null
   for (let i = idx - 1; i >= 0; i--) {
@@ -515,6 +598,7 @@ onBeforeUnmount(() => {
 })
 
 watch(() => userStore.userInfo?.id, () => {
+  access.value = null
   loadMessages()
   loadAccess()
 })
@@ -1188,12 +1272,18 @@ watch(() => userStore.userInfo?.id, () => {
   padding: 0 4px;
 }
 
+.context-note {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .input-hint {
   font-size: 11px;
-  color: #94a3b8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: #64748b;
+  white-space: normal;
+  line-height: 1.5;
 }
 
 .input-buttons {

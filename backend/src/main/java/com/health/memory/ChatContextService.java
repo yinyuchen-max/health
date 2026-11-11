@@ -60,7 +60,8 @@ public class ChatContextService {
                 transcript.rebase(user,current.revision());state=transcript.state(user);
             }
             String turn=UUID.randomUUID().toString(),lease=UUID.randomUUID().toString();
-            var input=transcript.append(user,current.revision(),turn,"user",message,snapshot.observedAt());
+            // Keep the original even if the model never answers, but do not show it to the next request until the reply is stored.
+            var input=transcript.append(user,current.revision(),turn,"user",message,snapshot.observedAt(),false);
             var history=transcript.active(user,state.coveredThrough(),input.seq());
             List<AiRequest.Message> recalled=new ArrayList<>();int bytes=0;
             // Include matches from the soon-to-be-compacted prefix on this very request as well.
@@ -120,6 +121,7 @@ public class ChatContextService {
         transactions.executeWithoutResult(tx->{
             var current=users.lock(turn.request().userId());
             if(current.revision()!=turn.revision()) return;
+            transcript.promote(turn.request().userId(),turn.turnKey());
             transcript.append(turn.request().userId(),turn.revision(),turn.turnKey(),"assistant",reply,LocalDateTime.now());
             if(turn.oversizedInput()) transcript.excludeOversizedTurn(turn.request().userId(),turn.turnKey());
         });

@@ -33,17 +33,18 @@ test('mini program edits carry the record version including zero', async () => {
   assert.equal(page.data.showForm, false)
 })
 
-test('mini program conflicts preserve draft and old version while refreshing the list', async () => {
+test('mini program conflicts reload the latest record so the next save can proceed', async () => {
   let writes = 0
   const page = loadPage({
     put: async () => { writes++; throw { status: 409, message: 'record conflict' } },
-    get: async () => ({ records: [{ id: 7, version: 1, notes: 'other edit' }] })
+    get: async () => ({ records: [{ id: 7, version: 1, recordDate: '2026-10-04', notes: 'other edit' }] })
   })
   await page.submitForm()
   assert.equal(writes, 1)
   assert.equal(page.data.showForm, true)
   assert.equal(page.data.editingId, 7)
-  assert.equal(page.data.editingVersion, 0)
-  assert.equal(page.data.form.notes, 'my draft')
+  assert.equal(page.data.editingVersion, 1)
+  assert.equal(page.data.form.notes, 'other edit')
+  assert.equal(page.data.form.recordDate, '2026-10-04')
   assert.equal(page.data.records[0].version, 1)
 })

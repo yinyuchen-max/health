@@ -1,3 +1,10 @@
+.notice { margin: 16rpx 24rpx 0; padding: 16rpx 20rpx; background: #fff7ed; color: #9a3412; border-radius: 12rpx; font-size: 24rpx; }
+.notice.emergency { background: #fef2f2; color: #b91c1c; }
+.context-note, .msg-actions { display: block; margin-top: 8rpx; color: #64748b; font-size: 22rpx; }
+.msg-actions text { margin-right: 16rpx; color: #0f766e; }
+.appointment-card { margin-top: 12rpx; padding: 16rpx; background: #f8fafc; border-radius: 12rpx; }
+.bubble-text { white-space: pre-wrap; }
+.btn-clear { margin-right: 12rpx; color: #64748b; font-size: 24rpx; }
 .chat-page {
   display: flex;
   flex-direction: column;

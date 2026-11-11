@@ -7,6 +7,11 @@
 ## 运动数据
 {{sportRecords}}
 
+## 步数、睡眠、目标与提醒
+{{dailyContext}}
+
+没有睡眠记录时，sleepInsight.score 必须为 null，并写明这不是实测睡眠评分。压力分必须说明是估计，不是压力测量。
+
 ## 历史健康数据趋势
 {{healthRecords}}
 

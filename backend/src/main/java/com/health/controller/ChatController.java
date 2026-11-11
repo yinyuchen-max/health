@@ -6,16 +6,21 @@ import com.health.common.utils.Result;
 import com.health.common.utils.SecurityUtil;
 import com.health.domain.dto.ChatRequestDTO;
 import com.health.domain.dto.ChatResponseDTO;
+import com.health.memory.LongTermMemoryService;
+import com.health.service.ChatFeedbackService;
 import com.health.service.ChatService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -37,10 +42,38 @@ public class ChatController {
 
     private final ChatService chatService;
     private final SecurityUtil securityUtil;
+    private final LongTermMemoryService memories;
+    private final ChatFeedbackService feedback;
 
-    public ChatController(ChatService chatService, SecurityUtil securityUtil) {
+    public ChatController(ChatService chatService, SecurityUtil securityUtil, LongTermMemoryService memories, ChatFeedbackService feedback) {
         this.chatService = chatService;
         this.securityUtil = securityUtil;
+        this.memories = memories;
+        this.feedback = feedback;
+    }
+
+    public record ChatHistoryItem(long seq, String role, String content, String recordedAt) {}
+    public record FeedbackRequest(String rating, String excerpt) {}
+
+    @GetMapping("/history")
+    public Result<List<ChatHistoryItem>> history() {
+        return Result.success(memories.history(securityUtil.getCurrentUserId()).stream()
+                .map(message -> new ChatHistoryItem(message.seq(), message.value().role(), message.value().content(), message.value().recordedAt()))
+                .toList());
+    }
+
+    @DeleteMapping("/history")
+    @RateLimit(key = "memory-clear", maxRequests = 10, timeWindow = 1, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.USER)
+    public Result<Void> clearHistory() {
+        memories.clear(securityUtil.getCurrentUserId());
+        return Result.success();
+    }
+
+    @PostMapping("/feedback")
+    @RateLimit(key = "chat-feedback", maxRequests = 30, timeWindow = 1, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.USER)
+    public Result<Void> feedback(@RequestBody FeedbackRequest request) {
+        feedback.save(securityUtil.getCurrentUserId(), request.rating(), request.excerpt());
+        return Result.success();
     }
 
     @PostMapping("/send")
@@ -97,6 +130,11 @@ public class ChatController {
             @Override
             public void onThinking(String token) {
                 sendEvent("thinking", token);
+            }
+
+            @Override
+            public void onContext(String note) {
+                sendEvent("context", note);
             }
 
             @Override

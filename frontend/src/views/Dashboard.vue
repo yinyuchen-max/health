@@ -1,5 +1,6 @@
 <template>
   <div class="dashboard">
+    <WechatStepsCard />
     <!-- 健康指标卡片 -->
     <el-row :gutter="16">
       <el-col :xs="24" :sm="12" :lg="6" v-for="card in metricCards" :key="card.label">
@@ -156,6 +157,7 @@ import { useRouter } from 'vue-router'
 import { Search, Plus, Document, Monitor, FirstAidKit, Odometer, DataLine } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import request from '../utils/request'
+import WechatStepsCard from '../components/WechatStepsCard.vue'
 import { useUserStore } from '../store/user'
 import { useAnalyticsStore } from '../store/analytics'
 
@@ -309,7 +311,8 @@ const toggleSelectAll = (val) => {
 const loadRecords = async () => {
   loading.value = true
   try {
-    const userId = userStore.userInfo?.id || 1
+    const userId = userStore.userInfo?.id
+    if (!userId) return
     const response = await request.get(`/health/records/${userId}`, {
       params: { pageNum: 1, pageSize: 200 }
     })

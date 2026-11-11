@@ -16,4 +16,18 @@
     </view>
     <button bindtap="load" loading="{{loading}}" disabled="{{loading}}">刷新服务状态</button>
   </view>
+  <view class="card memory-card">
+    <text class="title">长期记忆</text>
+    <text class="hint">AI 会记住你明确说过的习惯、目标和健康情况。前后不一致时需要你确认，确认前不会用于回答。</text>
+    <text class="hint" wx:if="{{memoryError}}">{{memoryError}}</text>
+    <view wx:for="{{memories}}" wx:key="id" class="memory-item">
+      <text class="label">{{item.status === 'CONFLICT' ? '待确认' : '已记住'}}</text>
+      <text class="hint">{{item.content}}</text>
+      <text class="hint" wx:if="{{item.pendingContent}}">另一种说法：{{item.pendingContent}}</text>
+      <button size="mini" data-id="{{item.id}}" data-content="{{item.pendingContent || item.content}}" bindtap="editMemory">修改并确认</button>
+      <button size="mini" data-id="{{item.id}}" bindtap="deleteMemory">删除</button>
+    </view>
+    <text class="hint" wx:if="{{memoriesLoaded && !memories.length}}">暂无长期记忆。聊过之后可以回来查看。</text>
+    <button bindtap="loadMemories" loading="{{memoryLoading}}">刷新记忆</button>
+  </view>
 </view>

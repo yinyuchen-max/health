@@ -3,6 +3,18 @@
   <view class="card">
     <text class="section-title">基本信息</text>
 
+    <view wx:if="{{userInfo.wechatBound}}" class="form-group">
+      <text class="form-label">微信头像</text>
+      <button open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+        <image wx:if="{{avatarDisplay}}" src="{{avatarDisplay}}" mode="aspectFill" style="width:120rpx;height:120rpx;border-radius:60rpx" />
+        <text wx:else>选择微信头像</text>
+      </button>
+    </view>
+    <view class="form-group">
+      <text class="form-label">昵称（两端同步）</text>
+      <input class="form-input" type="nickname" maxlength="64" placeholder="填写昵称" value="{{userInfo.nickname}}" bindinput="onInput" bindblur="onInput" data-field="nickname" />
+    </view>
+
     <view class="form-group">
       <text class="form-label">用户名</text>
       <input class="form-input" disabled value="{{userInfo.username}}" />

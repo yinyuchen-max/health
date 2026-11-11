@@ -58,7 +58,10 @@
       <template v-else-if="report">
         <el-empty v-if="report.dataStatus === 'NO_DATA'" :description="report.message || '家人还没有健康记录'" />
         <template v-else>
-          <div class="report-summary"><el-tag>{{ report.overallStatus || '健康概览' }}</el-tag><span v-if="report.bmi != null">BMI：{{ report.bmi }}</span><span>{{ formatTime(report.generatedAt) }}</span></div>
+          <div class="report-summary"><el-tag>{{ report.overallStatus || '健康概览' }}</el-tag><span v-if="report.bmi != null">BMI：{{ report.bmi }}</span><span>{{ formatTime(report.generatedAt) }}</span><span v-if="report.fromCache">记录未变化，这是上次的分析</span></div>
+          <p v-for="item in report.evidence || []" :key="item" class="hint">依据：{{ item }}</p>
+          <p v-if="report.sleepInferred" class="hint">没有睡眠记录，睡眠部分不是实测评分。</p>
+          <p v-if="report.stressInferred" class="hint">压力分是估计，不是压力测量。</p>
           <div v-for="risk in report.riskAssessments || []" :key="risk.assessmentType" class="report-panel">
             <strong>{{ riskLabels[risk.assessmentType] || risk.assessmentType }}</strong>
             <el-tag :type="risk.riskLevel === 'HIGH' ? 'danger' : risk.riskLevel === 'MEDIUM' ? 'warning' : 'success'">{{ levels[risk.riskLevel] || risk.riskLevel }}风险 · {{ risk.riskScore }}</el-tag>
@@ -71,7 +74,7 @@
           <p class="hint">报告来自家人已记录的数据与智能分析，仅供健康管理参考。</p>
         </template>
       </template>
-      <template #footer><el-button v-if="reportError" @click="viewReport(selected)">重试</el-button><el-button @click="reportVisible = false">关闭</el-button></template>
+      <template #footer><el-button v-if="report && report.dataStatus !== 'NO_DATA'" :loading="reportLoading" @click="viewReport(selected, true)">重新生成</el-button><el-button v-if="reportError" @click="viewReport(selected)">重试</el-button><el-button @click="reportVisible = false">关闭</el-button></template>
     </el-dialog>
   </div>
 </template>
@@ -147,12 +150,12 @@ async function acknowledge(item, complete) {
   await mutate(() => request.put(`/family/reminders/${item.id}/${complete ? 'complete' : 'read'}`), complete ? '已标记完成' : '已标记已读')
 }
 function clearReport() { ++reportSequence; report.value = null; selected.value = null; reportLoading.value = false; reportError.value = '' }
-async function viewReport(member) {
+async function viewReport(member, refresh = false) {
   if (!member) return
   const sequence = ++reportSequence
   selected.value = member; report.value = null; reportError.value = ''; reportVisible.value = true; reportLoading.value = true
   try {
-    const data = unwrap(await request.get(`/family/members/${member.id}/report`, { timeout: runtime.smartHealthTimeoutMs }))
+    const data = unwrap(await request.get(`/family/members/${member.id}/report`, { params: { refresh }, timeout: runtime.smartHealthTimeoutMs }))
     if (sequence === reportSequence && reportVisible.value) report.value = data
   } catch (e) { if (sequence === reportSequence) reportError.value = e.message || '报告加载失败，请重试' }
   finally { if (sequence === reportSequence) reportLoading.value = false }

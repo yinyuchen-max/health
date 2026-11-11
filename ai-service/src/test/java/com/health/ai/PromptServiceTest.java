@@ -19,7 +19,7 @@ class PromptServiceTest {
         assertTrue(prompts.render("health-report-system", Map.of()).contains("riskAssessments"));
         String report = prompts.render("health-report-user", Map.of(
                 "userProfile", "年龄30", "latestMetrics", "心率75", "healthRecords", "健康记录",
-                "sportRecords", "游泳30分钟", "retrievedKnowledge", "知识依据", "historyRecords", "历史记录"));
+                "sportRecords", "游泳30分钟", "dailyContext", "暂无睡眠", "retrievedKnowledge", "知识依据", "historyRecords", "历史记录"));
         assertTrue(report.contains("游泳30分钟"));
         assertFalse(report.contains("{{"));
         assertTrue(prompts.render("appointment-extract-system", Map.of(
@@ -43,7 +43,7 @@ class PromptServiceTest {
     void variableValuesAreLiteralAndNeverRenderedAgain() {
         PromptService prompts = new PromptService("");
         String literal = "{{sportRecords}} $1 \\ 用户备注";
-        String result = prompts.render("chat-user-context", Map.of("healthRecords", literal, "sportRecords", "跑步"));
+        String result = prompts.render("chat-user-context", Map.of("healthRecords", literal, "sportRecords", "跑步", "dailyContext", "暂无"));
         assertTrue(result.contains(literal));
         assertTrue(result.contains("跑步"));
     }

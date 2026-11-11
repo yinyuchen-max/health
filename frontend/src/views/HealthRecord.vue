@@ -316,7 +316,8 @@ const toggleSelectAll = (val) => {
 const loadRecords = async () => {
   loading.value = true
   try {
-    const userId = userStore.userInfo?.id || 1
+    const userId = userStore.userInfo?.id
+    if (!userId) { ElMessage.error('用户信息未就绪，请稍后重试'); return }
     const response = await request.get(`/health/records/${userId}`, { params: { pageNum: 1, pageSize: 1000 } })
     records.value = (response?.data?.records || []).map(r => ({ ...r, selected: false }))
     analyticsStore.setHealthRecords(records.value, userId)
@@ -359,7 +360,8 @@ const submitForm = async () => {
   if (!valid) return
   saving.value = true
   try {
-    const userId = userStore.userInfo?.id || 1
+    const userId = userStore.userInfo?.id
+    if (!userId) { ElMessage.error('用户信息未就绪，请稍后重试'); return }
     const payload = { userId, ...formState }
     if (editingRecordId.value) {
       await request.put(`/health/record/${editingRecordId.value}`, payload)
@@ -373,9 +375,28 @@ const submitForm = async () => {
     notifyHistoryChanged()
   } catch (error) {
     console.error('保存健康记录失败', error)
-    ElMessage.error(error?.message || '保存健康记录失败')
-    // 保留表单及旧版本；重新打开最新记录后才能再次保存。
-    if (error?.status === 409) await loadRecords()
+    if (error?.status === 409 && editingRecordId.value) {
+      await loadRecords()
+      const latest = records.value.find(r => r.id === editingRecordId.value)
+      if (!latest) {
+        dialogVisible.value = false
+        ElMessage.warning('这条记录已删除，请刷新后重试')
+      } else {
+        Object.assign(formState, {
+          version: latest.version,
+          recordDate: latest.recordDate,
+          bloodPressureSystolic: latest.bloodPressureSystolic,
+          bloodPressureDiastolic: latest.bloodPressureDiastolic,
+          heartRate: latest.heartRate,
+          bloodSugar: latest.bloodSugar != null ? Number(latest.bloodSugar) : null,
+          weight: latest.weight,
+          notes: latest.notes || ''
+        })
+        ElMessage.warning('这条记录刚刚被更新，表单已换成最新内容，请核对后再保存')
+      }
+    } else {
+      ElMessage.error(error?.message || '保存健康记录失败')
+    }
   } finally {
     saving.value = false
   }

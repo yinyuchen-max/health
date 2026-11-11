@@ -21,4 +21,12 @@ public class SmartHealthOverviewDTO {
     private SleepInsightDTO sleepInsight;
     private StressInsightDTO stressInsight;
     private List<String> quickTips;
+    /** 这次报告用到的个人记录。 */
+    private List<String> evidence;
+    /** 没有睡眠记录时，睡眠分析不是实测评分。 */
+    private boolean sleepInferred;
+    /** 压力分来自心率、运动和血压估计。 */
+    private boolean stressInferred;
+    /** true 表示数据未变化，返回的是上次生成的报告。 */
+    private boolean fromCache;
 }

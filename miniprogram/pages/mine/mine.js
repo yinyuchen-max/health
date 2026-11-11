@@ -1,25 +1,28 @@
 const { logout } = require('../../utils/auth')
 const { get } = require('../../utils/request')
+const { fetchUserInfo } = require('../../utils/auth')
+const { avatarUrl } = require('../../utils/wechat-data')
 
 Page({
   data: {
     userInfo: {},
+    avatarDisplay: '',
     userInitial: '',
     roleLabel: '',
     familyNoticeCount: 0
   },
 
-  onShow() {
+  async onShow() {
     const app = getApp()
     if (!app.checkLogin()) return
 
-    const userInfo = app.globalData.userInfo || {}
-    const username = userInfo.username || '用户'
+    const userInfo = await fetchUserInfo() || app.globalData.userInfo || {}
+    const username = userInfo.nickname || userInfo.username || '用户'
     const userInitial = username.slice(0, 1).toUpperCase()
     const roleMap = { admin: '管理员', user: '普通用户', doctor: '医生' }
     const roleLabel = roleMap[userInfo.role] || '普通用户'
 
-    this.setData({ userInfo, userInitial, roleLabel })
+    this.setData({ userInfo, userInitial, roleLabel, avatarDisplay: avatarUrl(userInfo.avatar) })
     this.loadFamilyNotices()
   },
 

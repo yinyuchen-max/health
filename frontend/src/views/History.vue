@@ -159,7 +159,8 @@ const setFilter = (type) => {
 const loadHistory = async () => {
   loading.value = true
   try {
-    const userId = userStore.userInfo?.id || 1
+    const userId = userStore.userInfo?.id
+    if (!userId) { ElMessage.error('用户信息未就绪，请稍后重试'); return }
     const params = { pageNum: currentPage.value, pageSize: pageSize.value }
     if (filterType.value) params.type = filterType.value
     if (dateRange.value?.length === 2) {

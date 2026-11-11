@@ -12,7 +12,7 @@
             <p class="hero-desc">基于真实健康记录和运动记录生成风险评分、恢复状态与个性化建议，帮助快速判断本周重点。</p>
           </div>
         </div>
-        <el-button type="primary" :loading="loading" @click="refreshData">刷新分析</el-button>
+        <el-button type="primary" :loading="loading" @click="refreshData(true)">重新生成</el-button>
       </div>
     </el-card>
 
@@ -58,7 +58,32 @@
     </el-card>
 
     <el-alert v-if="!loading && overview?.analysisSource === 'RULES'" type="info" :closable="false" :title="overview.message" style="margin-bottom: 16px" />
-    <el-button text @click="$router.push('/app/ai-settings')">AI 服务 · 开通与续费</el-button>
+    <el-alert v-if="!loading && overview && !noData && overview.evidence?.length" type="info" :closable="false" style="margin-bottom: 16px"
+      :title="overview.fromCache ? '记录没有变化，这是上次的分析。想要新结论请点重新生成。' : '这次分析使用了以下记录'">
+      <p v-for="item in overview.evidence" :key="item">{{ item }}</p>
+    </el-alert>
+    <el-card v-if="!loading" class="lifestyle-card">
+      <template #header><div class="card-header">日常记录</div></template>
+      <p>保存后的目标和睡眠会进入 AI 对话和健康报告。微信步数在首页同步后也会一起使用。</p>
+      <div class="goal-grid">
+        <label>每日步数<el-input-number v-model="goals.steps" :min="1000" :max="100000" :step="500" /></label>
+        <label>运动分钟<el-input-number v-model="goals.exerciseMinutes" :min="10" :max="600" /></label>
+        <label>饮水毫升<el-input-number v-model="goals.waterMl" :min="500" :max="8000" :step="100" /></label>
+        <label>睡眠小时<el-input-number v-model="goals.sleepHours" :min="4" :max="12" /></label>
+        <label>热量千卡<el-input-number v-model="goals.calories" :min="800" :max="6000" :step="50" /></label>
+      </div>
+      <el-button :loading="savingGoals" @click="saveGoals">保存目标</el-button>
+      <div class="sleep-form">
+        <el-date-picker v-model="sleepForm.date" type="date" value-format="YYYY-MM-DD" placeholder="睡眠日期" />
+        <el-time-picker v-model="sleepForm.bedTime" format="HH:mm" value-format="HH:mm" placeholder="入睡" />
+        <el-time-picker v-model="sleepForm.wakeTime" format="HH:mm" value-format="HH:mm" placeholder="醒来" />
+        <el-select v-model="sleepForm.quality" placeholder="睡眠质量">
+          <el-option v-for="item in sleepQualities" :key="item" :label="item" :value="item" />
+        </el-select>
+        <el-button :loading="savingSleep" @click="saveSleep">保存睡眠</el-button>
+      </div>
+    </el-card>
+    <el-button text @click="$router.push('/app/ai-chat')">去 AI 问答</el-button>
     <HealthDataNotice v-if="!loading && noData" :message="overview?.message" />
 
     <template v-if="!loading && overview && !noData">
@@ -95,7 +120,10 @@
               </div>
               <p>{{ risk.summary }}</p>
               <ul>
-                <li v-for="item in risk.recommendations" :key="item">{{ item }}</li>
+                <li v-for="item in risk.recommendations" :key="item">
+                  {{ item }}
+                  <el-button v-if="reminderDraft(item)" text @click="addReminder(item)">设为提醒</el-button>
+                </li>
               </ul>
             </div>
           </div>
@@ -113,7 +141,7 @@
               </div>
               <p>{{ overview?.nutritionAdvice?.summary }}</p>
               <ul>
-                <li v-for="item in overview?.nutritionAdvice?.recommendations || []" :key="item">{{ item }}</li>
+                <li v-for="item in overview?.nutritionAdvice?.recommendations || []" :key="item">{{ item }} <el-button v-if="reminderDraft(item)" text @click="addReminder(item)">设为提醒</el-button></li>
               </ul>
             </div>
           </el-card>
@@ -127,7 +155,7 @@
               </div>
               <p>{{ overview?.exercisePlan?.goal }} / {{ overview?.exercisePlan?.intensity }}</p>
               <ul>
-                <li v-for="item in overview?.exercisePlan?.weeklyPlan || []" :key="item">{{ item }}</li>
+                <li v-for="item in overview?.exercisePlan?.weeklyPlan || []" :key="item">{{ item }} <el-button v-if="reminderDraft(item)" text @click="addReminder(item)">设为提醒</el-button></li>
               </ul>
             </div>
           </el-card>
@@ -141,8 +169,8 @@
           <template #header><div class="card-header">睡眠分析</div></template>
           <div class="panel-card solid">
             <div class="score-line">
-              <span>睡眠评分</span>
-              <strong>{{ overview?.sleepInsight?.score || '--' }}</strong>
+              <span>{{ overview?.sleepInferred ? '睡眠（未记录，不是实测）' : '睡眠评分' }}</span>
+              <strong>{{ overview?.sleepInferred ? '—' : (overview?.sleepInsight?.score ?? '--') }}</strong>
             </div>
             <p>{{ overview?.sleepInsight?.summary }}</p>
             <ul>
@@ -156,7 +184,7 @@
           <template #header><div class="card-header">压力监测</div></template>
           <div class="panel-card solid">
             <div class="score-line">
-              <span>压力分值</span>
+              <span>压力估计，不是测量</span>
               <strong>{{ overview?.stressInsight?.score || '--' }}</strong>
             </div>
             <p>{{ overview?.stressInsight?.summary }}</p>
@@ -179,6 +207,7 @@ import { runtime } from '../config/runtime'
 import { useUserStore } from '../store/user'
 import { useAnalyticsStore } from '../store/analytics'
 import { ElMessage } from 'element-plus'
+import { reminderDraft, sleepMinutes } from '../utils/ai-assistant'
 import { Opportunity } from '@element-plus/icons-vue'
 import HealthDataNotice from '../components/HealthDataNotice.vue'
 
@@ -186,6 +215,12 @@ const userStore = useUserStore()
 const analyticsStore = useAnalyticsStore()
 const overview = ref(null)
 const loading = ref(false)
+const savingGoals = ref(false)
+const savingSleep = ref(false)
+const sleepQualities = ['优秀', '良好', '一般', '较差']
+const today = new Date().toISOString().slice(0, 10)
+const goals = ref({ steps: 10000, exerciseMinutes: 60, waterMl: 2000, sleepHours: 8, calories: 1800 })
+const sleepForm = ref({ date: today, bedTime: '23:00', wakeTime: '07:00', quality: '良好' })
 const noData = computed(() => overview.value?.dataStatus === 'NO_DATA')
 
 const riskChartRef = ref(null)
@@ -228,12 +263,12 @@ const averageRiskScore = computed(() => {
 
 const recoveryMetrics = computed(() => [
   {
-    name: '睡眠恢复',
-    value: Number(overview.value?.sleepInsight?.score || 0),
+    name: overview.value?.sleepInferred ? '睡眠未记录' : '睡眠恢复',
+    value: overview.value?.sleepInferred ? 0 : Number(overview.value?.sleepInsight?.score || 0),
     color: '#10b981'
   },
   {
-    name: '压力平衡',
+    name: '压力估计',
     value: Number(overview.value?.stressInsight?.score || 0),
     color: '#f59e0b'
   },
@@ -353,7 +388,7 @@ const renderRecoveryChart = () => {
   recoveryChart.setOption({
     tooltip: {
       trigger: 'item',
-      formatter: ({ name, value }) => `${name}<br/>${value} 分`
+      formatter: ({ name, value }) => name === '睡眠未记录' ? `${name}<br/>没有睡眠记录` : name === '压力估计' ? `${name}<br/>估计 ${value} 分，不是测量` : `${name}<br/>${value} 分`
     },
     radar: {
       radius: '62%',
@@ -428,16 +463,16 @@ const resizeCharts = () => {
   recoveryChart?.resize()
 }
 
-const refreshData = async () => {
-  const userId = userStore.userInfo?.id || 1
-  console.log('刷新智能健康数据, userId:', userId)
+const refreshData = async (force = false) => {
+  const userId = userStore.userInfo?.id
+  if (!userId) { ElMessage.error('用户信息未就绪，请稍后重试'); return }
   loading.value = true
 
   try {
     // 并行获取数据
     const [overviewResponse, sportRecordsResponse] = await Promise.all([
       request.get('/smart-health/overview', {
-        params: { userId },
+        params: { userId, refresh: force },
         timeout: runtime.smartHealthTimeoutMs
       }),
       analyticsStore.fetchSportRecords(userId, { pageNum: 1, pageSize: 1000 })
@@ -475,9 +510,56 @@ watch([riskData, recoveryMetrics, loading, noData], async () => {
   renderRecoveryChart()
 }, { deep: true })
 
+const loadLifestyle = async () => {
+  try {
+    const [goalResponse, sleepResponse] = await Promise.all([
+      request.get('/lifestyle/goals'),
+      request.get('/lifestyle/sleep', { params: { limit: 1 } })
+    ])
+    if (goalResponse.code === 200 && goalResponse.data) goals.value = goalResponse.data
+    const latest = sleepResponse.code === 200 ? sleepResponse.data?.[0] : null
+    if (latest) sleepForm.value = { date: latest.date, bedTime: latest.bedTime, wakeTime: latest.wakeTime, quality: latest.quality }
+  } catch (error) {
+    console.error('读取日常记录失败', error)
+  }
+}
+const saveGoals = async () => {
+  savingGoals.value = true
+  try {
+    const response = await request.put('/lifestyle/goals', goals.value)
+    if (response.code !== 200) throw new Error(response.message)
+    ElMessage.success('每日目标已保存，下次分析会用到')
+  } catch (error) {
+    ElMessage.error(error.message || '保存目标失败')
+  } finally { savingGoals.value = false }
+}
+const saveSleep = async () => {
+  const minutes = sleepMinutes(sleepForm.value.bedTime, sleepForm.value.wakeTime)
+  if (minutes < 30) { ElMessage.error('请填写有效的入睡和醒来时间'); return }
+  savingSleep.value = true
+  try {
+    const response = await request.put('/lifestyle/sleep', { ...sleepForm.value, sleepMinutes: minutes })
+    if (response.code !== 200) throw new Error(response.message)
+    ElMessage.success('睡眠已保存，下次分析会用到')
+  } catch (error) {
+    ElMessage.error(error.message || '保存睡眠失败')
+  } finally { savingSleep.value = false }
+}
+const addReminder = async (text) => {
+  const draft = reminderDraft(text)
+  if (!draft || !userStore.userInfo?.id) return
+  try {
+    const response = await request.post('/reminder/preferences', { ...draft, userId: userStore.userInfo.id })
+    if (response.code !== 200) throw new Error(response.message)
+    ElMessage.success('已添加到提醒，可在提醒页调整时间')
+  } catch (error) {
+    ElMessage.error(error.message || '添加提醒失败')
+  }
+}
+
 onMounted(async () => {
   try {
-    await refreshData()
+    await Promise.all([refreshData(), loadLifestyle()])
     await nextTick()
     renderRiskChart()
     renderRecoveryChart()
@@ -500,6 +582,8 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 16px;
 }
+.goal-grid, .sleep-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 12px 0; }
+.goal-grid label { display: flex; flex-direction: column; gap: 6px; color: #475569; font-size: 13px; }
 
 /* Hero */
 .page-hero {

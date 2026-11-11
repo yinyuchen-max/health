@@ -1,8 +1,11 @@
 const { get, put } = require('../../utils/request')
+const { saveWechatProfile, avatarUrl } = require('../../utils/wechat-data')
 
 Page({
   data: {
     userInfo: {},
+    avatarDisplay: '',
+    avatarPath: '',
     saving: false,
     changing: false,
     genderIndex: 0,
@@ -24,7 +27,7 @@ Page({
       const genderMap = { 0: 0, 1: 1, 2: 2 }
       const genderIndex = genderMap[userInfo.gender] || 0
 
-      this.setData({ userInfo, genderIndex })
+      this.setData({ userInfo, genderIndex, avatarDisplay: avatarUrl(userInfo.avatar) })
     } catch (err) {
       console.error('加载用户信息失败:', err)
     }
@@ -33,6 +36,10 @@ Page({
   onInput(e) {
     const field = e.currentTarget.dataset.field
     this.setData({ [`userInfo.${field}`]: e.detail.value })
+  },
+
+  onChooseAvatar(e) {
+    this.setData({ avatarPath: e.detail.avatarUrl, avatarDisplay: e.detail.avatarUrl })
   },
 
   onPasswordInput(e) {
@@ -50,11 +57,13 @@ Page({
   },
 
   async saveProfile() {
+    if (this.data.saving) return
     const { userInfo } = this.data
 
     this.setData({ saving: true })
     try {
       const data = {
+        ...(userInfo.nickname?.trim() ? { nickname: userInfo.nickname.trim() } : {}),
         email: userInfo.email,
         phone: userInfo.phone,
         gender: userInfo.gender,
@@ -64,11 +73,16 @@ Page({
       }
 
       await put('/api/user/info', data)
+      if (userInfo.wechatBound && this.data.avatarPath) {
+        const saved = await saveWechatProfile(userInfo.nickname, this.data.avatarPath)
+        this.setData({ avatarPath: '', avatarDisplay: avatarUrl(saved.avatar) })
+      }
       wx.showToast({ title: '保存成功', icon: 'success' })
 
       // 更新全局用户信息
       const app = getApp()
       app.globalData.userInfo = { ...app.globalData.userInfo, ...data }
+      wx.setStorageSync('userInfo', JSON.stringify(app.globalData.userInfo))
     } catch (err) {
       console.error('保存失败:', err)
     } finally {

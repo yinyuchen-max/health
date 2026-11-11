@@ -156,6 +156,32 @@ class AppointmentConversationServiceTest {
     }
 
     @Test
+    void healthDetailsWithoutAppointmentIntentStayWithTheMedicalChat() {
+        String reply = conversationService.handleMessage("心血管内科量的血压是120/80，电话13800138000", 3L);
+        assertEquals(null, reply);
+        verify(informationExtractor, never()).extract(anyString(), any());
+    }
+
+    @Test
+    void refusalDoesNotStartAnAppointment() {
+        assertEquals(null, conversationService.handleMessage("先不要预约，我血压180", 3L));
+        verify(informationExtractor, never()).extract(anyString(), any());
+    }
+
+    @Test
+    void confirmingTwiceDoesNotCreateTwoAppointments() {
+        when(informationExtractor.extract(anyString(), any(AppointmentExtractionContext.class)))
+                .thenReturn(completeExtraction());
+        when(doctorAppointmentService.createAppointment(any(DoctorAppointment.class))).thenReturn(true);
+        conversationService.handleMessage("我要预约医生", 9L);
+        var threads = java.util.stream.IntStream.range(0, 2).mapToObj(i -> new Thread(() ->
+                conversationService.handleMessage("确认预约", 9L))).toList();
+        threads.forEach(Thread::start);
+        threads.forEach(thread -> { try { thread.join(5000); } catch (InterruptedException e) { throw new IllegalStateException(e); } });
+        verify(doctorAppointmentService, org.mockito.Mockito.times(1)).createAppointment(any());
+    }
+
+    @Test
     void extractionFailureShowsFutureExample() {
         when(informationExtractor.extract(anyString(), any(AppointmentExtractionContext.class)))
                 .thenThrow(new IllegalStateException("test extraction failure"));

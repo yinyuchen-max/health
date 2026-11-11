@@ -183,6 +183,9 @@
         </div>
 
         <!-- 输入区 -->
+        <p class="pet-note">回复仅供参考，不能代替医生诊断。</p>
+        <p v-if="contextNote" class="pet-note">{{ contextNote }}</p>
+        <p v-if="emergency" class="pet-note emergency">如果这是紧急情况，请立即拨打 120。</p>
         <div class="panel-input">
           <textarea
             v-model="panelInput"
@@ -221,6 +224,8 @@ import { Close, Delete, Promotion, VideoPause } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 import { renderMarkdown } from '../utils/markdown'
 import request from '../utils/request'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { clearServerChat, isEmergency, loadChatHistory } from '../utils/ai-assistant'
 
 const userStore = useUserStore()
 
@@ -252,6 +257,8 @@ const pupilStyle = computed(() => ({
 
 // ===== 聊天逻辑 =====
 const panelMessages = ref([])
+const contextNote = ref('')
+const emergency = computed(() => panelMessages.value.some(item => item.role === 'user' && isEmergency(item.content)))
 const panelInput = ref('')
 const panelScrollRef = ref(null)
 const panelTextareaRef = ref(null)
@@ -273,7 +280,11 @@ const quickQuestions = [
 // ===== 历史 =====
 const historyKey = () => `ai-chat-pet-${userStore.userInfo?.id || 'default'}`
 
-const loadMessages = () => {
+const loadMessages = async () => {
+  try {
+    const remote = await loadChatHistory(request)
+    if (remote.length) { panelMessages.value = remote; return }
+  } catch (error) { console.error('读取服务器对话失败', error) }
   const saved = localStorage.getItem(historyKey())
   if (saved) {
     try { panelMessages.value = JSON.parse(saved) } catch { panelMessages.value = [] }
@@ -420,6 +431,7 @@ const handlePanelSend = async () => {
 
 const sendPanelMessage = async (text) => {
   if (isThinking.value) return
+  isThinking.value = true
   panelMessages.value.push({ role: 'user', content: text, time: formatTime() })
   panelMessages.value.push({ role: 'assistant', content: '', time: formatTime(), streaming: true })
   const msgIdx = panelMessages.value.length - 1
@@ -452,6 +464,7 @@ const streamReply = async (userText, msgIdx) => {
   abortController = new AbortController()
   isThinking.value = true
   let content = ''
+  let streamStarted = false
   const setContent = (val) => { panelMessages.value[msgIdx].content = val }
 
   try {
@@ -465,7 +478,12 @@ const streamReply = async (userText, msgIdx) => {
       signal: abortController.signal
     })
 
-    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok || !res.body) {
+      const error = new Error(`HTTP ${res.status}`)
+      error.fallback = true
+      throw error
+    }
+    streamStarted = true
     const reader = res.body.getReader()
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
@@ -480,7 +498,9 @@ const streamReply = async (userText, msgIdx) => {
         buffer = buffer.slice(sep + 2)
         const evt = parseSse(block)
         if (!evt) continue
-        if (evt.name === 'token') {
+        if (evt.name === 'context') {
+          contextNote.value = evt.data
+        } else if (evt.name === 'token') {
           content += evt.data
           setContent(content)
           scheduleScroll()
@@ -488,23 +508,29 @@ const streamReply = async (userText, msgIdx) => {
           setContent(evt.data || content)
           return
         } else if (evt.name === 'error') {
-          throw new Error(evt.data || 'AI 服务出错')
+          const error = new Error(evt.data || 'AI 服务出错')
+          error.streamed = true
+          throw error
         }
       }
     }
-    throw new Error('连接关闭')
+    const closed = new Error('连接关闭')
+    closed.streamed = true
+    throw closed
   } catch (e) {
     if (abortedByUser) {
       setContent(content ? `${content}\n\n*（已停止）*` : '*（已停止）*')
-    } else {
+    } else if (e?.fallback && !streamStarted) {
       setContent('')
       try {
         const res = await request.post('/chat/send', { message: userText })
         const reply = res?.data?.reply || res?.reply
         setContent(reply || '抱歉，AI 暂时不可用~')
       } catch {
-        setContent('抱歉，AI 暂时不可用~')
+        setContent(content || '抱歉，AI 暂时不可用~')
       }
+    } else {
+      setContent(content || e?.message || '抱歉，AI 暂时不可用~')
     }
   } finally {
     if (abortController) { abortController.abort(); abortController = null }
@@ -531,8 +557,16 @@ const parseSse = (block) => {
 }
 
 const handleClearChat = async () => {
-  panelMessages.value = []
-  saveMessages()
+  try {
+    await ElMessageBox.confirm('将删除网页、小程序和服务器上的这段对话，并清除 AI 已记住的长期记忆。', '清空对话', { type: 'warning' })
+    await clearServerChat(request)
+    panelMessages.value = []
+    contextNote.value = ''
+    saveMessages()
+    ElMessage.success('对话和长期记忆已清空')
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error.message || '清空失败')
+  }
 }
 
 // ===== 生命周期 =====
@@ -935,6 +969,8 @@ watch(() => userStore.userInfo?.id, () => { loadMessages() })
 }
 
 /* 输入区 */
+.pet-note { margin: 0; padding: 8px 12px 0; color: #64748b; font-size: 12px; line-height: 1.5; }
+.pet-note.emergency { color: #b91c1c; }
 .panel-input {
   display: flex;
   align-items: flex-end;

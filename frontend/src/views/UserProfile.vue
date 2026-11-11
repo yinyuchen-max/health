@@ -3,7 +3,8 @@
     <el-card class="profile-card fade-in">
       <div class="profile-header">
         <div class="avatar-circle">
-          <el-icon :size="60" color="#409EFF"><UserFilled /></el-icon>
+          <el-avatar v-if="profile.avatar" :size="100" :src="avatarUrl(profile)" />
+          <el-icon v-else :size="60" color="#409EFF"><UserFilled /></el-icon>
         </div>
         <h3 class="title-animation">个人信息</h3>
         <p class="subtitle-animation">完善您的个人资料</p>
@@ -26,6 +27,13 @@
               <el-icon><User /></el-icon>
             </template>
           </el-input>
+        </el-form-item>
+
+        <el-form-item label="昵称" class="form-item-animate">
+          <el-input v-model="profile.nickname" maxlength="64" placeholder="填写昵称，两端同步" />
+        </el-form-item>
+        <el-form-item v-if="profile.wechatBound" label="微信资料">
+          <span>可在小程序「我的 → 个人信息」选择微信头像，保存后同步到这里。</span>
         </el-form-item>
 
         <el-form-item label="邮箱" class="form-item-animate" style="animation-delay: 0.1s;">
@@ -138,6 +146,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 import request from '../utils/request'
+import { avatarUrl } from '../utils/user-display'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -148,6 +157,9 @@ const isSaving = ref(false)
 const profile = ref({
   id: '',
   username: '',
+  nickname: '',
+  avatar: '',
+  wechatBound: false,
   email: '',
   phone: '',
   gender: '',
@@ -190,6 +202,9 @@ const applyProfileData = (userData) => {
   profile.value = {
     id: userData.id ?? '',
     username: userData.username ?? '',
+    nickname: userData.nickname ?? '',
+    avatar: userData.avatar ?? '',
+    wechatBound: !!userData.wechatBound,
     email: userData.email ?? '',
     phone: userData.phone ?? '',
     gender: mapGenderToText(userData.gender),
@@ -242,13 +257,8 @@ const updateProfile = async () => {
     return
   }
 
-  if (!profile.value.email || !profile.value.phone) {
-    ElMessage.warning('请完善必填信息：邮箱、手机号')
-    return
-  }
-
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(profile.value.email)) {
+  if (profile.value.email && !emailRegex.test(profile.value.email)) {
     ElMessage.warning('请输入正确的邮箱格式')
     return
   }
@@ -258,6 +268,7 @@ const updateProfile = async () => {
 
     const payload = {
       ...profile.value,
+      nickname: profile.value.nickname?.trim() || undefined,
       gender: mapGenderToValue(profile.value.gender)
     }
 
@@ -267,6 +278,7 @@ const updateProfile = async () => {
     userStore.updateUserInfo({
       id: profile.value.id,
       username: profile.value.username,
+      nickname: payload.nickname,
       email: profile.value.email,
       phone: profile.value.phone,
       gender: payload.gender,

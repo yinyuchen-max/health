@@ -1,10 +1,11 @@
 const { get, post } = require('../../utils/request')
+const { syncWeRun } = require('../../utils/wechat-data')
 
 Page({
   data: {
     username: '',
     greeting: '',
-    todaySteps: 0,
+    todaySteps: '--',
     todayCalories: 0,
     todaySportMinutes: 0,
     stepsPercent: 0,
@@ -30,7 +31,7 @@ Page({
   onShow() {
     const app = getApp()
     if (!app.checkLogin()) return
-    this.setData({ username: app.globalData.userInfo?.username || '用户' })
+    this.setData({ username: app.globalData.userInfo?.nickname || app.globalData.userInfo?.username || '用户' })
     this.loadWeRunData()
     this.loadData()
   },
@@ -43,72 +44,14 @@ Page({
     this.setData({ greeting })
   },
 
-  // 获取微信运动步数
+  // 展示服务端保存的数据；已授权时顺便同步，未授权时保留历史快照。
   async loadWeRunData() {
     try {
-      // 先请求微信运动授权
-      const authRes = await new Promise((resolve, reject) => {
-        wx.getSetting({
-          success(res) {
-            if (res.authSetting['scope.werun']) {
-              resolve(true)
-            } else {
-              wx.authorize({
-                scope: 'scope.werun',
-                success: () => resolve(true),
-                fail: () => resolve(false)
-              })
-            }
-          },
-          fail: () => resolve(false)
-        })
-      })
-
-      if (!authRes) {
-        // 未授权，使用默认值
-        this.setData({
-          todaySteps: 0,
-          stepsPercent: 0
-        })
-        return
-      }
-
-      // 获取微信运动加密数据
-      const runRes = await new Promise((resolve, reject) => {
-        wx.getWeRunData({
-          success: resolve,
-          fail: reject
-        })
-      })
-
-      // 将加密数据发送到后端解密获取步数
-      // 统一走 request 封装：自动拼 baseUrl、携带 JWT、401 跳登录
-      // 注意后端真实路径为 /api/user/wechat/decrypt-run-data（UserController 类级 @RequestMapping("/api/user")）
-      const app = getApp()
-      const token = app.globalData.token
-      if (token && runRes.encryptedData) {
-        const data = await post('/api/user/wechat/decrypt-run-data', {
-          encryptedData: runRes.encryptedData,
-          iv: runRes.iv
-        }, { showLoading: false, showError: false })
-
-        const steps = data && data.stepInfoList
-        if (steps && steps.length > 0) {
-          const today = new Date().toISOString().slice(0, 10)
-          // timestamp 为秒级 Unix 时间戳，需换算成日期字符串后再与 today 比较
-          const todayData = steps.find(s => new Date(s.timestamp * 1000).toISOString().slice(0, 10) === today)
-          const stepCount = todayData ? todayData.step : (steps[steps.length - 1].step || 0)
-          const stepsPercent = Math.min(Math.round(stepCount / 10000 * 100), 100)
-          this.setData({
-            todaySteps: stepCount,
-            stepsPercent
-          })
-        }
-      }
-    } catch (err) {
-      console.log('微信运动数据获取失败:', err)
-      // 失败时使用默认值
-      this.setData({ todaySteps: 0, stepsPercent: 0 })
+      const data = await syncWeRun()
+      const count = data.todaySteps
+      this.setData({ todaySteps: count == null ? '--' : count, stepsPercent: Math.min(Math.round((count || 0) / 10000 * 100), 100) })
+    } catch (error) {
+      this.setData({ todaySteps: '--', stepsPercent: 0 })
     }
   },
 

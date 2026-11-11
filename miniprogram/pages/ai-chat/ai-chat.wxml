@@ -1,5 +1,8 @@
 <view class="chat-page">
-  <navigator url="/pages/ai-settings/ai-settings" style="padding: 16rpx 24rpx; color: #6366f1">AI 服务 · 开通与续费</navigator>
+  <navigator url="/pages/ai-settings/ai-settings" style="padding: 16rpx 24rpx; color: #6366f1">AI 服务 · 开通、续费与记忆</navigator>
+  <view wx:if="{{accessMessage}}" class="notice">{{accessMessage}}</view>
+  <navigator wx:if="{{conflictCount}}" url="/pages/ai-settings/ai-settings" class="notice">有 {{conflictCount}} 条记忆需要你确认，确认前不会用于回答</navigator>
+  <view wx:if="{{emergency}}" class="notice emergency">如果这是正在发生的紧急情况，请立即拨打 120 或就近急诊。</view>
   <!-- 消息列表 -->
   <scroll-view
     class="chat-scroll"
@@ -29,6 +32,17 @@
             <text class="dot"></text><text class="dot"></text><text class="dot"></text>
           </text>
           <text wx:else class="bubble-text">{{item.content}}</text>
+          <text wx:if="{{item.contextNote}}" class="context-note">{{item.contextNote}}</text>
+          <view wx:if="{{!item.streaming && !loading}}" class="msg-actions">
+            <text bindtap="copyMessage" data-text="{{item.content}}">复制</text>
+            <text wx:if="{{index === messages.length - 1}}" bindtap="regenerate">重新生成</text>
+            <text bindtap="rateMessage" data-rating="USEFUL" data-text="{{item.content}}">有帮助</text>
+            <text bindtap="rateMessage" data-rating="INACCURATE" data-text="{{item.content}}">需要纠正</text>
+          </view>
+          <view wx:if="{{item.appointment && !loading}}" class="appointment-card">
+            <text>需要预约医生？说出症状后，AI 会帮你确认科室和时间。</text>
+            <button size="mini" bindtap="sendAppointment">继续预约</button>
+          </view>
         </view>
       </block>
       <block wx:else>
@@ -49,12 +63,13 @@
         bindinput="onInput"
         bindconfirm="sendMessage"
         placeholder="输入你的健康问题…"
-        disabled="{{loading}}"
+        disabled="{{loading || !aiAllowed}}"
         confirm-type="send"
       />
+      <view class="btn-clear" bindtap="clearHistory">清空</view>
       <view wx:if="{{loading}}" class="btn-stop" bindtap="stopStreaming">停止</view>
       <view wx:else class="btn-send {{inputText ? 'active' : ''}}" bindtap="sendMessage">发送</view>
     </view>
-    <text class="input-hint">内容由 AI 生成，仅供参考</text>
+    <text class="input-hint">内容由 AI 生成，仅供参考，不能代替医生诊断。胸痛、呼吸困难、严重出血或昏迷请立即拨打 120。</text>
   </view>
 </view>

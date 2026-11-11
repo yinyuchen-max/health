@@ -27,9 +27,10 @@ public class SmartHealthController {
 
     @GetMapping("/overview")
     @RateLimit(key = "smart-overview", maxRequests = 10, timeWindow = 1, timeUnit = TimeUnit.MINUTES, limitBy = LimitType.USER)
-    public Result<SmartHealthOverviewDTO> getOverview(@RequestParam Long userId) {
+    public Result<SmartHealthOverviewDTO> getOverview(@RequestParam Long userId,
+                                                      @RequestParam(defaultValue = "false") boolean refresh) {
         // 校验是否有权查看该用户的智能分析数据
         securityUtil.requireOwnerOrAdmin(userId);
-        return Result.success(smartHealthService.generateOverview(userId));
+        return Result.success(smartHealthService.generateOverview(userId, refresh));
     }
 }

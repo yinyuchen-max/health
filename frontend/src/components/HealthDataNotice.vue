@@ -1,9 +1,9 @@
 <template>
   <el-card shadow="never">
     <el-alert
-      title="请先补充健康数据"
-      :description="message || '暂无健康或运动记录，暂时无法生成健康报告。请先添加至少一条记录，再查看分析。'"
-      type="warning"
+      title="请先添加数据"
+      :description="message || '暂无可分析的数据，请先添加健康记录或运动记录。'"
+      type="info"
       show-icon
       :closable="false"
     />

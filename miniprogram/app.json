@@ -1,6 +1,7 @@
 {
   "pages": [
     "pages/login/login",
+    "pages/web-login/web-login",
     "pages/dashboard/dashboard",
     "pages/records/records",
     "pages/discover/discover",

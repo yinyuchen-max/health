@@ -20,6 +20,7 @@ import com.health.mapper.SportRecordMapper;
 import com.health.mapper.UserMapper;
 import com.health.ai.AiClient;
 import com.health.ai.AiRequest;
+import com.health.service.LifestyleService;
 import com.health.service.SmartHealthService;
 
 
@@ -97,7 +98,7 @@ public class SmartHealthServiceImpl implements SmartHealthService {
     private long aiTimeoutMs;
 
     // 每个用户仅保存一份带内容哈希的报告，不按时间过期。
-    private static final String OVERVIEW_CACHE_KEY_PREFIX = "smart:overview:v3:";
+    private static final String OVERVIEW_CACHE_KEY_PREFIX = "smart:overview:v4:";
     private final Object[] generationLocks = IntStream.range(0, 64).mapToObj(i -> new Object()).toArray();
 
     @Autowired(required = false)
@@ -105,6 +106,9 @@ public class SmartHealthServiceImpl implements SmartHealthService {
 
     @Autowired(required = false)
     private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired(required = false)
+    private LifestyleService lifestyle;
 
     public SmartHealthServiceImpl(HealthRecordMapper healthRecordMapper, SportRecordMapper sportRecordMapper,
                                   UserMapper userMapper, AiClient ai, ObjectMapper objectMapper) {
@@ -114,39 +118,59 @@ public class SmartHealthServiceImpl implements SmartHealthService {
 
     @Override
     public SmartHealthOverviewDTO generateOverview(Long userId) {
-        ai.requireAccess(ai.payer(userId));
+        return generateOverview(userId, false);
+    }
+
+    @Override
+    public SmartHealthOverviewDTO generateOverview(Long userId, boolean refresh) {
         // 同一用户的并发刷新串行复查缓存，避免同时重复生成。
         synchronized (generationLocks[Math.floorMod(userId.hashCode(), generationLocks.length)]) {
-            return generateOverviewIfChanged(userId);
+            return generateOverviewIfChanged(userId, refresh);
         }
     }
 
-    private SmartHealthOverviewDTO generateOverviewIfChanged(Long userId) {
+    private LifestyleService.Capture readLifestyle(Long userId) {
+        if (lifestyle == null) return null;
+        try {
+            return lifestyle.capture(userId);
+        } catch (RuntimeException exception) {
+            log.info("日常记录暂时读不到, userId={}", userId);
+            return null;
+        }
+    }
+
+    private SmartHealthOverviewDTO generateOverviewIfChanged(Long userId, boolean refresh) {
         User user = userMapper.selectById(userId);
         List<HealthRecord> healthRecords = loadHealthRecords(userId);
         List<SportRecord> sportRecords = loadSportRecords(userId);
+        LifestyleService.Capture life = readLifestyle(userId);
         // 必须早于缓存读取、RAG 和 AI：删除全部记录后也不能展示旧报告。
-        // 个人资料、提醒或历史副本不能替代当前有效的健康/运动记录。
-        if (healthRecords.isEmpty() && sportRecords.isEmpty()) {
+        // 个人资料、提醒或历史副本不能替代当前有效的健康、运动、步数或睡眠记录。
+        if (healthRecords.isEmpty() && sportRecords.isEmpty() && (life == null || !life.tracked())) {
             SmartHealthOverviewDTO empty = new SmartHealthOverviewDTO();
             empty.setUserId(userId);
             empty.setDataStatus("NO_DATA");
-            empty.setMessage("暂无健康或运动记录，暂时无法生成健康报告。请先添加至少一条健康记录或运动记录，再查看分析。");
-            empty.setOverallStatus("待补充数据");
+            empty.setMessage("暂无可分析的数据，请先添加健康记录或运动记录，也可以同步微信步数或记录睡眠。");
+            empty.setOverallStatus("待添加数据");
             empty.setRiskAssessments(List.of());
             empty.setQuickTips(List.of());
             return empty;
         }
+        // 空数据提示不使用 AI；有记录时，读取缓存或生成分析仍必须先验证 AI 权限。
+        Long payerId = ai.payer(userId);
+        ai.requireAccess(payerId);
         List<HistoryRecord> historyRecords = loadHistoryRecords(userId);
 
-        // 基于健康/运动数据计算指纹：数据不变则指纹不变，直接返回缓存，节省 AI 调用
-        Long payerId = ai.payer(userId);
-        String fingerprint = ContentHash.sha256(computeDataFingerprint(user, healthRecords, sportRecords, historyRecords)
+        // 基于健康/运动/日常数据计算指纹：数据不变则指纹不变，直接返回缓存，节省 AI 调用
+        String fingerprint = ContentHash.sha256(computeDataFingerprint(user, healthRecords, sportRecords, historyRecords, life)
                 + "\n" + ai.cacheScope(payerId));
         String cacheKey = OVERVIEW_CACHE_KEY_PREFIX + userId + ":" + payerId;
-        SmartHealthOverviewDTO cached = readOverviewFromCache(cacheKey, fingerprint, userId);
-        if (cached != null) {
-            return cached;
+        if (!refresh) {
+            SmartHealthOverviewDTO cached = readOverviewFromCache(cacheKey, fingerprint, userId);
+            if (cached != null) {
+                cached.setFromCache(true);
+                return cached;
+            }
         }
 
         HealthRecord latestHealthRecord = healthRecords.isEmpty() ? null : healthRecords.get(0);
@@ -158,10 +182,12 @@ public class SmartHealthServiceImpl implements SmartHealthService {
                 ? latestHealthRecord.getBloodSugar().doubleValue()
                 : null;
         // Capture the caller before asynchronous work loses the SecurityContext.
+        String dailyContext = life == null ? "暂无微信步数、睡眠记录、每日目标和提醒。" : life.prompt();
         SmartHealthOverviewDTO aiResult = tryGenerateWithAI(payerId, user, healthRecords, sportRecords,
-                bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord, historyRecords);
+                bmi, weeklyExerciseMinutes, avgHeartRate, latestBloodSugar, latestHealthRecord, historyRecords, dailyContext);
         if (aiResult != null) {
             aiResult.setAnalysisSource("AI");
+            explain(aiResult, life, healthRecords, sportRecords);
             writeOverviewToCache(cacheKey, fingerprint, aiResult, userId);
             return aiResult;
         }
@@ -181,14 +207,48 @@ public class SmartHealthServiceImpl implements SmartHealthService {
         overview.setStressInsight(buildStressInsight(avgHeartRate, weeklyExerciseMinutes, latestHealthRecord));
         overview.setOverallStatus(buildOverallStatus(overview.getRiskAssessments()));
         overview.setQuickTips(buildQuickTips(overview));
+        explain(overview, life, healthRecords, sportRecords);
         return overview;
+    }
+
+    private void explain(SmartHealthOverviewDTO overview, LifestyleService.Capture life,
+                         List<HealthRecord> healthRecords, List<SportRecord> sportRecords) {
+        List<String> evidence = new ArrayList<>();
+        if (!healthRecords.isEmpty()) evidence.add("健康记录 " + healthRecords.size() + " 条");
+        if (!sportRecords.isEmpty()) evidence.add("运动记录 " + sportRecords.size() + " 条");
+        if (life != null) evidence.addAll(life.evidence());
+        else evidence.add("这次没有读到步数、睡眠、每日目标和提醒");
+        overview.setEvidence(evidence);
+        boolean measuredSleep = life != null && life.hasSleep();
+        overview.setSleepInferred(!measuredSleep);
+        overview.setStressInferred(true);
+        overview.setFromCache(false);
+        if (overview.getSleepInsight() == null) overview.setSleepInsight(new SleepInsightDTO());
+        if (!measuredSleep) {
+            overview.getSleepInsight().setScore(null);
+            String summary = overview.getSleepInsight().getSummary();
+            if (summary == null || !summary.startsWith("没有睡眠记录")) {
+                overview.getSleepInsight().setSummary("没有睡眠记录，这不是实测睡眠评分。" + (summary == null ? "" : summary));
+            }
+        } else {
+            String summary = overview.getSleepInsight().getSummary();
+            if (summary == null || !summary.contains("睡眠记录")) {
+                overview.getSleepInsight().setSummary("以下结合了你保存的睡眠记录。" + (summary == null ? "" : summary));
+            }
+        }
+        if (overview.getStressInsight() == null) overview.setStressInsight(new StressInsightDTO());
+        String stress = overview.getStressInsight().getSummary();
+        if (stress == null || !stress.contains("不是压力测量")) {
+            overview.getStressInsight().setSummary("压力分是根据心率、运动和血压估计的，不是压力测量。" + (stress == null ? "" : stress));
+        }
     }
 
     // ==================== Redis 缓存与数据指纹 ====================
 
     /** 显式选择业务字段并排序，忽略查询顺序和技术更新时间；JSON 避免分隔符歧义。 */
     private String computeDataFingerprint(User user, List<HealthRecord> healthRecords,
-                                         List<SportRecord> sportRecords, List<HistoryRecord> historyRecords) {
+                                         List<SportRecord> sportRecords, List<HistoryRecord> historyRecords,
+                                         LifestyleService.Capture life) {
         List<Object> profile = user == null ? List.of() : Arrays.asList(
                 user.getAge(), user.getGender(), user.getHeight(), user.getWeight());
         List<String> health = healthRecords.stream().map(r -> snapshot(Arrays.asList(
@@ -201,7 +261,7 @@ public class SmartHealthServiceImpl implements SmartHealthService {
         List<String> history = historyRecords.stream().map(r -> snapshot(Arrays.asList(
                 r.getId(), r.getType(), r.getSourceRecordId(), r.getTitle(), r.getContent(),
                 r.getRecordDate() == null ? null : r.getRecordDate().toString()))).sorted().toList();
-        return ContentHash.sha256(snapshot(Arrays.asList(profile, health, sport, history)));
+        return ContentHash.sha256(snapshot(Arrays.asList(profile, health, sport, history, life == null ? "" : life.fingerprint())));
     }
 
     private String snapshot(Object value) {
@@ -666,10 +726,10 @@ public class SmartHealthServiceImpl implements SmartHealthService {
 
     private SmartHealthOverviewDTO tryGenerateWithAI(Long payerId, User user, List<HealthRecord> healthRecords,
             List<SportRecord> sportRecords, Double bmi, Integer weeklyExerciseMinutes, Double avgHeartRate,
-            Double latestBloodSugar, HealthRecord latestHealthRecord, List<HistoryRecord> historyRecords) {
+            Double latestBloodSugar, HealthRecord latestHealthRecord, List<HistoryRecord> historyRecords, String dailyContext) {
         try {
             AiRequest invocation=ai.prepare(payerId,"report",buildAIContext(user,healthRecords,sportRecords,bmi,
-                    weeklyExerciseMinutes,avgHeartRate,latestBloodSugar,latestHealthRecord,historyRecords),List.of(),null);
+                    weeklyExerciseMinutes,avgHeartRate,latestBloodSugar,latestHealthRecord,historyRecords,dailyContext),List.of(),null);
             java.util.function.Supplier<SmartHealthOverviewDTO> generate=()->{
                 try { return parseAIResponse(ai.complete(invocation),user.getId()); }
                 catch(Exception e) { throw new CompletionException(e); }
@@ -694,7 +754,8 @@ public class SmartHealthServiceImpl implements SmartHealthService {
             Double avgHeartRate,
             Double latestBloodSugar,
             HealthRecord latestHealthRecord,
-            List<HistoryRecord> historyRecords
+            List<HistoryRecord> historyRecords,
+            String dailyContext
     ) {
         StringBuilder profile = new StringBuilder();
         // 用户基本信息
@@ -763,7 +824,8 @@ public class SmartHealthServiceImpl implements SmartHealthService {
                         r.getType(), r.getTitle(), r.getContent(),
                         r.getRecordDate() == null ? null : r.getRecordDate().toString())).toList());
         return Map.of("userProfile",profile.toString(),"latestMetrics",metrics.toString(),
-                "sportRecords",sports.toString(),"healthRecords",health.toString(),"historyRecords",history);
+                "sportRecords",sports.toString(),"healthRecords",health.toString(),"historyRecords",history,
+                "dailyContext", dailyContext == null ? "暂无微信步数、睡眠记录、每日目标和提醒。" : dailyContext);
 
     }
 

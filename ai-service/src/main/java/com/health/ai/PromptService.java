@@ -22,10 +22,10 @@ public class PromptService {
     private static final Pattern VARIABLE = Pattern.compile("\\{\\{\\s*([a-zA-Z][a-zA-Z0-9_]*)\\s*}}");
     private static final Map<String, Set<String>> CONTRACTS = Map.of(
             "chat-system", Set.of(),
-            "chat-user-context", Set.of("healthRecords", "sportRecords"),
+            "chat-user-context", Set.of("healthRecords", "sportRecords", "dailyContext"),
             "health-report-system", Set.of(),
             "health-report-user", Set.of("userProfile", "latestMetrics", "healthRecords",
-                    "sportRecords", "retrievedKnowledge", "historyRecords"),
+                    "sportRecords", "dailyContext", "retrievedKnowledge", "historyRecords"),
             "appointment-extract-system", Set.of("currentDate", "context", "departments"),
             "memory-context", Set.of("longTermMemories"),
             "memory-extract-system", Set.of("existingMemories","currentDate"),

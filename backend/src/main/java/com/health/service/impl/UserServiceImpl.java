@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.health.common.exception.AuthStoreUnavailableException;
 import com.health.common.exception.BusinessException;
 import com.health.common.enums.UserRole;
 import com.health.common.enums.UserStatus;
@@ -78,9 +79,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         try {
             fails = stringRedisTemplate.opsForValue().get(failKey);
         } catch (Exception e) {
-            // Redis 异常时放行（fail-open），与限流切面的容错策略一致，不阻断正常登录
-            log.warn("读取登录失败计数异常，跳过锁定检查: {}", e.getMessage());
-            return;
+            // 锁定计数读不到时不能放行，否则 Redis 故障会变成无限次猜密码。
+            log.warn("读取登录失败计数异常，拒绝本次登录: {}", e.getMessage());
+            throw new AuthStoreUnavailableException();
         }
         if (fails == null) {
             return;
@@ -156,6 +157,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         UserVO userVO = new UserVO();
         BeanUtils.copyProperties(user, userVO);
+        userVO.setWechatBound(user.getWechatOpenid() != null);
         return userVO;
     }
 
@@ -171,6 +173,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         UserVO userVO = new UserVO();
         BeanUtils.copyProperties(user, userVO);
+        userVO.setWechatBound(user.getWechatOpenid() != null);
         return userVO;
     }
 
@@ -183,6 +186,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
 
         // 只更新允许修改的字段
+        if (userVO.getNickname() != null) {
+            String nickname = userVO.getNickname().strip();
+            if (nickname.isEmpty() || nickname.length() > 64) throw new BusinessException("昵称需为 1 至 64 个字符");
+            user.setNickname(nickname);
+        }
         user.setEmail(userVO.getEmail());
         user.setPhone(userVO.getPhone());
         user.setGender(userVO.getGender());

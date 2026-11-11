@@ -22,6 +22,10 @@ public class ChatServiceImpl implements ChatService {
             r->{var t=new Thread(r,"health-chat-context");t.setDaemon(true);return t;},new ThreadPoolExecutor.AbortPolicy());
     private final RuntimeSettings settings;
     private final LongTermMemoryService longTermMemory;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private LifestyleService lifestyle;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.health.memory.ChatTranscriptRepository transcripts;
     public ChatServiceImpl(AiClient ai, AppointmentConversationService appointments,
                            HealthRecordService healthRecordService, SportRecordService sportRecordService,
                            ChatContextService contexts, RuntimeSettings settings, LongTermMemoryService longTermMemory) {
@@ -35,10 +39,17 @@ public class ChatServiceImpl implements ChatService {
         ChatResponseDTO result=new ChatResponseDTO();
         if(message==null || message.isBlank()) { result.setReply("请告诉我您想咨询的健康问题。"); return result; }
         String appointment=appointments.handleMessage(message,userId);
-        if(appointment!=null) { result.setReply(appointment); return result; }
+        if(appointment!=null) {
+            result.setReply(appointment);
+            result.setContextNote("这次在办理预约，预约内容不会写入长期记忆。");
+            rememberAppointment(userId, message, appointment);
+            return result;
+        }
         try {
             var snapshot=longTermMemory.beginTurn(userId,message);
-            var turn=invocation(message,userId,snapshot);
+            var prepared=prepareContext(userId);
+            result.setContextNote(prepared.note());
+            var turn=invocation(message,userId,snapshot,prepared.variables());
             String reply=ai.complete(turn.request());
             contexts.complete(turn,reply);
             longTermMemory.completeTurn(snapshot,message,()->{});
@@ -52,14 +63,20 @@ public class ChatServiceImpl implements ChatService {
         ai.requireAccess(userId);
         if(message==null || message.isBlank()) { callback.onComplete("请告诉我您想咨询的健康问题。"); return; }
         String appointment=appointments.handleMessage(message,userId);
-        if(appointment!=null) { callback.onToken(appointment); callback.onComplete(appointment); return; }
+        if(appointment!=null) {
+            callback.onContext("这次在办理预约，预约内容不会写入长期记忆。");
+            rememberAppointment(userId, message, appointment);
+            callback.onToken(appointment); callback.onComplete(appointment); return;
+        }
         try { streamPreparation.execute(()->streamReply(message,userId,callback)); }
         catch(RejectedExecutionException e) { callback.onError(new AiServiceException("AI 请求较多，请稍后重试")); }
     }
     private void streamReply(String message,Long userId,StreamCallback callback) {
         try {
             var snapshot=longTermMemory.beginTurn(userId,message);
-            var turn=invocation(message,userId,snapshot);
+            var prepared=prepareContext(userId);
+            callback.onContext(prepared.note());
+            var turn=invocation(message,userId,snapshot,prepared.variables());
             ai.stream(turn.request(),new StreamCallback() {
                 public void onThinking(String token) { callback.onThinking(token); }
                 public void onToken(String token) { callback.onToken(token); }
@@ -73,13 +90,42 @@ public class ChatServiceImpl implements ChatService {
         } catch(AiServiceException e) { callback.onError(e); }
         catch(Exception e) { callback.onError(new AiServiceException("AI 服务暂时不可用，请稍后重试")); }
     }
-    private ChatContextService.Turn invocation(String message,Long userId,LongTermMemoryService.Snapshot snapshot) {
-        var variables=new HashMap<>(context(userId));
+    /** Appointment text stays visible across devices but never enters model context or memory extraction. */
+    private void rememberAppointment(Long userId, String userText, String assistantText) {
+        if (transcripts == null || userText == null || userText.isBlank() || assistantText == null || assistantText.isBlank()) return;
+        String turn = "visible-" + java.util.UUID.randomUUID();
+        var now = java.time.LocalDateTime.now();
+        transcripts.append(userId, 0L, turn, "user", clip(userText), now, false);
+        transcripts.append(userId, 0L, turn, "assistant", clip(assistantText), now, false);
+    }
+    private static String clip(String text) { String value = text.trim(); return value.length() > 20000 ? value.substring(0, 20000) : value; }
+    private record PreparedContext(Map<String,String> variables, String note) {}
+    private PreparedContext prepareContext(Long userId) {
+        LifestyleService.Capture life=readLifestyle(userId);
+        Map<String,String> variables=context(userId, life);
+        return new PreparedContext(variables, contextNote(variables, life));
+    }
+    private LifestyleService.Capture readLifestyle(Long userId) {
+        if(lifestyle==null || userId==null) return null;
+        try { return lifestyle.capture(userId); }
+        catch(RuntimeException ignored) { return null; }
+    }
+    private ChatContextService.Turn invocation(String message,Long userId,LongTermMemoryService.Snapshot snapshot,Map<String,String> base) {
+        var variables=new HashMap<>(base);
         variables.put("longTermMemories",longTermMemory.context(snapshot));
         return contexts.prepare(userId,message,snapshot,variables);
     }
+    private String contextNote(Map<String,String> variables, LifestyleService.Capture life) {
+        List<String> items=new ArrayList<>();
+        if(variables.getOrDefault("healthRecords","").contains("日期:")) items.add("健康记录");
+        if(variables.getOrDefault("sportRecords","").contains("日期:")) items.add("运动记录");
+        if(life!=null) items.addAll(life.labels());
+        else if(lifestyle!=null && variables.getOrDefault("dailyContext","").contains("读取失败")) items.add("部分日常记录暂时读不到");
+        if(items.isEmpty()) return "这次没有读到个人记录，回答会是一般建议，不是你的实测结果。";
+        return "这次参考了"+String.join("、", items)+"。没有列出的内容，表示当前没有记录。";
+    }
     @jakarta.annotation.PreDestroy public void close() { streamPreparation.shutdownNow(); }
-    private Map<String,String> context(Long userId) {
+    private Map<String,String> context(Long userId, LifestyleService.Capture life) {
         StringBuilder healthText = new StringBuilder();
         StringBuilder sportText = new StringBuilder();
         
@@ -111,6 +157,10 @@ public class ChatServiceImpl implements ChatService {
                         if (hr.getWeight() != null) {
                             healthText.append("体重: ").append(hr.getWeight()).append(" kg, ");
                         }
+                        if (hr.getNotes() != null && !hr.getNotes().isBlank()) {
+                            String notes = hr.getNotes().trim();
+                            healthText.append("备注: ").append(notes.length() > 80 ? notes.substring(0, 80) : notes).append(", ");
+                        }
                         healthText.append("\n");
                     }
                 }
@@ -131,7 +181,9 @@ public class ChatServiceImpl implements ChatService {
             
         }
         
+        String daily=life!=null ? life.prompt() : lifestyle==null ? "暂无微信步数、睡眠记录、每日目标和提醒。" : "步数、睡眠、目标和提醒暂时读取失败。";
         return Map.of("healthRecords", healthText.isEmpty() ? "暂无记录" : healthText.toString(),
-                "sportRecords", sportText.isEmpty() ? "暂无记录" : sportText.toString());
+                "sportRecords", sportText.isEmpty() ? "暂无记录" : sportText.toString(),
+                "dailyContext", daily);
     }
 }

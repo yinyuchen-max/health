@@ -101,8 +101,12 @@ public class FamilyService {
     }
 
     public SmartHealthOverviewDTO report(long userId, long id) {
+        return report(userId, id, false);
+    }
+
+    public SmartHealthOverviewDTO report(long userId, long id, boolean refresh) {
         var link = active(userId, id, false);
-        var report = smartHealth.generateOverview(link.other(userId));
+        var report = refresh ? smartHealth.generateOverview(link.other(userId), true) : smartHealth.generateOverview(link.other(userId));
         // AI 生成期间若对方解除授权，也不能返回报告。
         active(userId, id, false);
         return report;
