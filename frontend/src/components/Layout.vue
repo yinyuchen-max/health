@@ -2,33 +2,28 @@
   <div class="layout-container">
     <!-- 侧边栏 -->
     <el-aside v-if="!isMobile" width="220px" class="sidebar">
-      <div class="logo">
-        <div class="logo-icon">
-          <svg viewBox="0 0 24 24" fill="none" width="28" height="28">
-            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#3B82F6"/>
-          </svg>
-        </div>
-        <span class="logo-text">健康管理系统</span>
-      </div>
+      <router-link to="/app/ai-chat" class="logo">
+        <span class="logo-mark" aria-hidden="true">问</span>
+        <span class="logo-text">医学问答</span>
+      </router-link>
 
       <el-menu
         :default-active="activeMenu"
         router
         class="sidebar-menu"
       >
-        <template v-for="item in menuItems" :key="item.index">
-          <el-menu-item v-if="!item.hidden" :index="item.index">
-            <div class="menu-icon-wrapper" :style="{ background: item.color + '18' }">
-              <el-icon :style="{ color: item.color }"><component :is="item.icon" /></el-icon>
+        <el-menu-item-group v-for="section in menuSections" :key="section.key" :title="section.title">
+          <el-menu-item v-for="item in section.items" :key="item.index" :index="item.index">
+            <div class="menu-icon-wrapper">
+              <el-icon><component :is="item.icon" /></el-icon>
             </div>
             <span>{{ item.label }}</span>
           </el-menu-item>
-        </template>
+        </el-menu-item-group>
       </el-menu>
 
       <div class="sidebar-footer">
-        <p class="footer-slogan">关注健康</p>
-        <p class="footer-slogan-sub">从现在开始</p>
+        <p class="footer-slogan">回答不能代替医生诊断</p>
       </div>
     </el-aside>
 
@@ -42,14 +37,10 @@
       class="mobile-drawer"
     >
       <div class="drawer-content">
-        <div class="logo">
-          <div class="logo-icon">
-            <svg viewBox="0 0 24 24" fill="none" width="28" height="28">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#3B82F6"/>
-            </svg>
-          </div>
-          <span class="logo-text">健康管理系统</span>
-        </div>
+        <router-link to="/app/ai-chat" class="logo" @click="drawerVisible = false">
+          <span class="logo-mark" aria-hidden="true">问</span>
+          <span class="logo-text">医学问答</span>
+        </router-link>
 
         <el-menu
           :default-active="activeMenu"
@@ -57,14 +48,14 @@
           class="sidebar-menu"
           @select="drawerVisible = false"
         >
-          <template v-for="item in menuItems" :key="item.index">
-            <el-menu-item v-if="!item.hidden" :index="item.index">
-              <div class="menu-icon-wrapper" :style="{ background: item.color + '18' }">
-                <el-icon :style="{ color: item.color }"><component :is="item.icon" /></el-icon>
+          <el-menu-item-group v-for="section in menuSections" :key="section.key" :title="section.title">
+            <el-menu-item v-for="item in section.items" :key="item.index" :index="item.index">
+              <div class="menu-icon-wrapper">
+                <el-icon><component :is="item.icon" /></el-icon>
               </div>
               <span>{{ item.label }}</span>
             </el-menu-item>
-          </template>
+          </el-menu-item-group>
         </el-menu>
       </div>
     </el-drawer>
@@ -77,16 +68,12 @@
               <el-icon :size="22"><Operation /></el-icon>
             </el-button>
             <div class="greeting-area">
-              <h2 class="greeting-title">{{ greeting }}，{{ displayName(userStore.userInfo) }} <span class="wave">👋</span></h2>
-              <p class="greeting-sub">关爱自己，从每一次记录开始</p>
+              <h2 class="greeting-title">{{ greeting }}，{{ displayName(userStore.userInfo) }}</h2>
+              <p class="greeting-sub">有症状、用药或检查结果，直接问</p>
             </div>
           </div>
           <div class="header-right">
-            <div class="weather-info">
-              <span class="weather-icon">☀️</span>
-              <span class="weather-date">{{ currentDate }}</span>
-              <span class="weather-location">济南 18°C 晴</span>
-            </div>
+            <span class="header-date">{{ currentDate }}</span>
             <el-dropdown trigger="click" @command="handleCommand">
               <div class="user-dropdown">
                 <el-avatar :size="36" :src="avatarUrl(userStore.userInfo)" class="user-avatar">{{ displayName(userStore.userInfo).slice(0, 1).toUpperCase() }}</el-avatar>
@@ -97,7 +84,7 @@
                 <el-dropdown-menu>
                   <el-dropdown-item command="profile">个人信息</el-dropdown-item>
                   <el-dropdown-item command="family">家庭成员</el-dropdown-item>
-                  <el-dropdown-item command="ai-chat">AI 服务</el-dropdown-item>
+                  <el-dropdown-item command="ai-chat">提问</el-dropdown-item>
                   <el-dropdown-item command="password">修改密码</el-dropdown-item>
                   <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
                 </el-dropdown-menu>
@@ -107,7 +94,7 @@
         </div>
       </el-header>
 
-      <el-main class="main-content">
+      <el-main class="main-content" :class="{ 'is-ask': route.path === '/app/ai-chat' }">
         <router-view />
       </el-main>
     </el-container>
@@ -170,22 +157,46 @@ const currentDate = computed(() => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}  ${days[now.getDay()]}`
 })
 
-const menuItems = computed(() => [
-  { index: '/app/dashboard', icon: HomeFilled, label: '首页', color: '#3B82F6', hidden: false },
-  { index: '/app/health', icon: Document, label: '健康记录', color: '#3B82F6', hidden: false },
-  { index: '/app/sport', icon: Timer, label: '运动记录', color: '#10B981', hidden: false },
-  { index: '/app/reminder', icon: Bell, label: '提醒设置', color: '#F59E0B', hidden: false },
-  { index: '/app/history', icon: Clock, label: '历史记录', color: '#8B5CF6', hidden: false },
-  { index: '/app/analytics', icon: DataAnalysis, label: '数据分析', color: '#06B6D4', hidden: false },
-  { index: '/app/ai-chat', icon: ChatDotRound, label: 'AI 服务', color: '#6366F1', hidden: false },
-  { index: '/app/smart-health', icon: Opportunity, label: '智能健康', color: '#EC4899', hidden: false },
-  { index: '/app/doctors', icon: FirstAidKit, label: '医生列表', color: '#14B8A6', hidden: false },
-  { index: '/app/doctor-chat', icon: ChatLineRound, label: '医生咨询', color: '#F97316', hidden: false },
-  { index: '/doctor/dashboard', icon: UserFilled, label: '医生工作台', color: '#3B82F6', hidden: !isDoctor.value },
-  { index: '/app/profile', icon: User, label: '个人信息', color: '#64748B', hidden: false },
-  { index: '/app/family', icon: UserFilled, label: '家庭成员', color: '#0D9488', hidden: false },
-  { index: '/app/user-management', icon: Setting, label: '用户管理', color: '#64748B', hidden: !isAdmin.value },
-  { index: '/app/doctor-management', icon: Setting, label: '医生审核', color: '#64748B', hidden: !isAdmin.value }
+const menuSections = computed(() => [
+  {
+    key: 'ask',
+    title: '',
+    items: [
+      { index: '/app/ai-chat', icon: ChatDotRound, label: '提问' }
+    ]
+  },
+  {
+    key: 'records',
+    title: '档案',
+    items: [
+      { index: '/app/dashboard', icon: HomeFilled, label: '健康总览' },
+      { index: '/app/health', icon: Document, label: '健康记录' },
+      { index: '/app/sport', icon: Timer, label: '运动记录' },
+      { index: '/app/reminder', icon: Bell, label: '提醒设置' },
+      { index: '/app/analytics', icon: DataAnalysis, label: '数据分析' },
+      { index: '/app/history', icon: Clock, label: '历史记录' }
+    ]
+  },
+  {
+    key: 'care',
+    title: '就诊',
+    items: [
+      { index: '/app/smart-health', icon: Opportunity, label: '智能健康' },
+      { index: '/app/doctors', icon: FirstAidKit, label: '医生列表' },
+      { index: '/app/doctor-chat', icon: ChatLineRound, label: '医生咨询' },
+      { index: '/doctor/dashboard', icon: UserFilled, label: '医生工作台', hidden: !isDoctor.value }
+    ].filter(item => !item.hidden)
+  },
+  {
+    key: 'account',
+    title: '账户',
+    items: [
+      { index: '/app/profile', icon: User, label: '个人信息' },
+      { index: '/app/family', icon: UserFilled, label: '家庭成员' },
+      { index: '/app/user-management', icon: Setting, label: '用户管理', hidden: !isAdmin.value },
+      { index: '/app/doctor-management', icon: Setting, label: '医生审核', hidden: !isAdmin.value }
+    ].filter(item => !item.hidden)
+  }
 ])
 
 const isDoctor = ref(false)
@@ -228,12 +239,12 @@ onBeforeUnmount(() => {
 .layout-container {
   display: flex;
   min-height: 100vh;
-  background: #EBF5FF;
+  background: #F4F7F6;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .sidebar {
-  background: #fff;
-  border-right: 1px solid #E8F0FE;
+  background: #1C3D36;
   display: flex;
   flex-direction: column;
 }
@@ -242,91 +253,114 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 64px;
-  padding: 0 20px;
-  border-bottom: 1px solid #F0F4F8;
+  height: 72px;
+  padding: 0 18px;
+  text-decoration: none;
+  color: #F4F7F6;
 }
 
-.logo-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: #EBF5FF;
-  border-radius: 10px;
+.logo:focus-visible {
+  outline: 2px solid #F4F7F6;
+  outline-offset: -4px;
+}
+
+.logo-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  background: #B23A2F;
+  color: #F4F7F6;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .logo-text {
-  font-size: 17px;
-  font-weight: 700;
-  color: #1E293B;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: #F4F7F6;
 }
 
 .sidebar-menu {
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: #D5E3DC;
+  --el-menu-hover-text-color: #F4F7F6;
+  --el-menu-hover-bg-color: rgba(244, 247, 246, 0.08);
+  --el-menu-active-color: #F4F7F6;
   border-right: none;
-  padding: 12px 10px;
+  padding: 4px 10px 12px;
   flex: 1;
+  overflow-y: auto;
   background: transparent;
 }
 
-.sidebar-menu .el-menu-item {
-  height: 44px;
-  margin-bottom: 4px;
-  border-radius: 10px;
-  color: #475569;
+.sidebar-menu :deep(.el-menu-item-group__title) {
+  padding: 16px 12px 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(213, 227, 220, 0.62);
+}
+
+.sidebar-menu :deep(.el-menu-item-group__title:empty) {
+  display: none;
+}
+
+.sidebar-menu :deep(.el-menu-item) {
+  height: 42px;
+  margin-bottom: 2px;
+  border-radius: 2px;
+  color: #D5E3DC;
   font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
-.sidebar-menu .el-menu-item:hover {
-  background: #F1F5F9;
-  color: #1E293B;
+.sidebar-menu :deep(.el-menu-item:hover) {
+  background: rgba(244, 247, 246, 0.08);
+  color: #F4F7F6;
 }
 
-.sidebar-menu .el-menu-item.is-active {
-  background: #EBF5FF;
-  color: #3B82F6;
+.sidebar-menu :deep(.el-menu-item.is-active) {
+  background: rgba(244, 247, 246, 0.14);
+  color: #F4F7F6;
   font-weight: 600;
+  box-shadow: inset 3px 0 0 #B23A2F;
+}
+
+.sidebar-menu :deep(.el-menu-item:focus-visible) {
+  outline: 2px solid #F4F7F6;
+  outline-offset: -2px;
 }
 
 .menu-icon-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 22px;
+  margin-right: 8px;
   flex-shrink: 0;
 }
 
 .menu-icon-wrapper .el-icon {
   font-size: 16px;
+  color: inherit;
 }
 
 .sidebar-footer {
-  padding: 16px 20px;
-  border-top: 1px solid #F0F4F8;
+  padding: 14px 18px 18px;
 }
 
 .footer-slogan {
   margin: 0;
-  font-size: 13px;
-  color: #94A3B8;
-  font-weight: 500;
-}
-
-.footer-slogan-sub {
-  margin: 2px 0 0;
   font-size: 12px;
-  color: #CBD5E1;
+  line-height: 1.5;
+  color: rgba(213, 227, 220, 0.72);
 }
 
 .drawer-content {
   height: 100%;
-  background: #fff;
+  background: #1C3D36;
   display: flex;
   flex-direction: column;
 }
@@ -341,8 +375,8 @@ onBeforeUnmount(() => {
 .header {
   height: 64px;
   padding: 0 24px;
-  background: #fff;
-  border-bottom: 1px solid #F0F4F8;
+  background: #F4F7F6;
+  border-bottom: 1px solid #D7E2DC;
 }
 
 .header-content {
@@ -368,26 +402,15 @@ onBeforeUnmount(() => {
 
 .greeting-title {
   margin: 0;
+  font-family: "Noto Serif SC", "Songti SC", serif;
   font-size: 20px;
-  color: #1E293B;
-  font-weight: 700;
-}
-
-.wave {
-  display: inline-block;
-  animation: wave 2s ease-in-out infinite;
-  transform-origin: 70% 70%;
-}
-
-@keyframes wave {
-  0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(20deg); }
-  75% { transform: rotate(-10deg); }
+  color: #1C3D36;
+  font-weight: 600;
 }
 
 .greeting-sub {
   margin: 2px 0 0;
-  color: #94A3B8;
+  color: #5E736C;
   font-size: 13px;
 }
 
@@ -397,20 +420,9 @@ onBeforeUnmount(() => {
   gap: 20px;
 }
 
-.weather-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.header-date {
   font-size: 13px;
-  color: #64748B;
-}
-
-.weather-icon {
-  font-size: 18px;
-}
-
-.weather-date {
-  font-weight: 500;
+  color: #5E736C;
 }
 
 .user-dropdown {
@@ -424,18 +436,23 @@ onBeforeUnmount(() => {
 }
 
 .user-dropdown:hover {
-  background: #F1F5F9;
+  background: #E7EEEA;
+}
+
+.user-dropdown:focus-visible {
+  outline: 2px solid #1C3D36;
+  outline-offset: 2px;
 }
 
 .user-avatar {
-  background: #3B82F6;
-  color: #fff;
+  background: #1C3D36;
+  color: #F4F7F6;
   font-weight: 600;
   font-size: 14px;
 }
 
 .username {
-  color: #334155;
+  color: #1C3D36;
   font-weight: 600;
   font-size: 14px;
 }
@@ -447,8 +464,13 @@ onBeforeUnmount(() => {
 
 .main-content {
   padding: 20px 24px;
-  background: #EBF5FF;
+  background: #F4F7F6;
   min-height: 0;
+}
+
+.main-content.is-ask {
+  padding: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 768px) {
@@ -465,7 +487,7 @@ onBeforeUnmount(() => {
     display: none;
   }
 
-  .weather-info {
+  .header-date {
     display: none;
   }
 
@@ -482,6 +504,6 @@ onBeforeUnmount(() => {
 <style>
 .mobile-drawer .el-drawer__body {
   padding: 0;
-  background: #fff;
+  background: #1C3D36;
 }
 </style>

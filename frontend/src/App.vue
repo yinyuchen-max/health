@@ -4,16 +4,16 @@
 
 <style>
 #app {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #1E293B;
+  color: #1C3D36;
 }
 
 body {
   margin: 0;
   padding: 0;
-  background: #EBF5FF;
+  background: #F4F7F6;
 }
 
 /* 全局 Element Plus 微调 */

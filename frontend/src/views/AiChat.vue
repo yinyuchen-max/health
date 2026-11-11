@@ -3,15 +3,9 @@
     <!-- 顶部窄标题条 -->
     <div class="chat-header">
       <div class="header-left">
-        <div class="brand-chip">
-          <el-icon :size="18"><ChatDotRound /></el-icon>
-        </div>
         <div class="header-text">
-          <div class="header-title-row">
-            <h2>AI 健康顾问</h2>
-            <span class="model-badge">平台模型 · 流式回复</span>
-          </div>
-          <p>健康、饮食、运动、睡眠…… 有问题尽管问（也可以说「预约」来预约医生）</p>
+          <h2>医学问答</h2>
+          <p>由大模型回答。胸痛、呼吸困难、严重出血或昏迷，请立即拨打 120。</p>
         </div>
       </div>
       <el-button
@@ -30,20 +24,16 @@
       <div class="chat-column">
         <!-- 欢迎页 -->
         <div v-if="messages.length === 0" class="welcome">
-          <div class="welcome-orb">
-            <span class="orb-emoji">🤖</span>
-          </div>
-          <h3>你好，我是你的 AI 健康顾问</h3>
-          <p class="welcome-sub">可以问我任何健康问题，也可以直接点下面的快捷问题开始</p>
-          <div class="quick-grid">
+          <h3>今天想问什么？</h3>
+          <p class="welcome-sub">描述症状、用药或检查结果。点下面的问题可以直接发出。</p>
+          <div class="quick-list">
             <button
               v-for="q in quickQuestions"
               :key="q.text"
               class="quick-card"
               @click="sendMessage(q.text)"
             >
-              <span class="qc-icon">{{ q.icon }}</span>
-              <span class="qc-text">{{ q.text }}</span>
+              {{ q.text }}
             </button>
           </div>
         </div>
@@ -61,7 +51,7 @@
             </div>
             <div class="msg-main">
               <div class="msg-meta">
-                <span class="msg-name">AI 健康顾问</span>
+                <span class="msg-name">医学问答</span>
                 <span v-if="msg.streaming && !msg.content" class="typing-label">
                   <span class="label-dot"></span>正在思考
                 </span>
@@ -135,7 +125,7 @@
           v-model="inputText"
           type="textarea"
           :autosize="{ minRows: 1, maxRows: 6 }"
-          placeholder="输入你的健康问题…"
+          placeholder="描述症状、用药或检查结果"
           resize="none"
           :disabled="loading"
           class="chat-textarea"
@@ -246,11 +236,10 @@ const showAppointmentCard = (idx) =>
   && (mentionsAppointment(messages.value[idx]?.content) || mentionsAppointment(previousUserText(idx)))
 
 const quickQuestions = [
-  { icon: '💧', text: '每天应该喝多少水？' },
-  { icon: '🌙', text: '如何改善睡眠质量？' },
-  { icon: '🧘', text: '久坐办公怎么缓解腰痛？' },
-  { icon: '🏃', text: '什么样的运动适合减脂？' },
-  { icon: '🏥', text: '我想预约医生' }
+  { text: '感冒和流感怎么区分？' },
+  { text: '血压偏高，日常生活要注意什么？' },
+  { text: '这个症状需要马上去医院吗？' },
+  { text: '感冒药可以和降压药一起吃吗？' }
 ]
 
 /* ---------------- 本地历史 ---------------- */
@@ -608,13 +597,8 @@ watch(() => userStore.userInfo?.id, () => {
 .ai-chat-page {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  height: calc(100vh - 132px);
-  background:
-    radial-gradient(1100px 480px at 18% -12%, rgba(59, 130, 246, 0.06), transparent 60%),
-    radial-gradient(900px 420px at 92% 112%, rgba(16, 185, 129, 0.06), transparent 60%),
-    #EBF5FF;
-  border-radius: 16px;
+  height: calc(100vh - 64px);
+  background: #F4F7F6;
   overflow: hidden;
 }
 
@@ -624,9 +608,9 @@ watch(() => userStore.userInfo?.id, () => {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 14px 22px 12px;
-  background: #fff;
-  border-bottom: 1px solid #F0F4F8;
+  padding: 18px 28px 14px;
+  background: #F4F7F6;
+  border-bottom: 1px solid #D7E2DC;
   flex-shrink: 0;
 }
 
@@ -637,46 +621,20 @@ watch(() => userStore.userInfo?.id, () => {
   min-width: 0;
 }
 
-.brand-chip {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  background: #3B82F6;
-  box-shadow: 0 6px 14px rgba(59, 130, 246, 0.3);
-  flex-shrink: 0;
-}
-
-.header-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .header-text h2 {
   margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.model-badge {
-  font-size: 11px;
-  color: #2563eb;
-  background: #eaf1fe;
-  border: 1px solid #d3e2fd;
-  padding: 1px 8px;
-  border-radius: 999px;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: #1C3D36;
 }
 
 .header-text p {
-  margin: 3px 0 0;
-  font-size: 12.5px;
-  color: #64748b;
+  margin: 4px 0 0;
+  max-width: 46em;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #5E736C;
 }
 
 .clear-btn {
@@ -705,9 +663,9 @@ watch(() => userStore.userInfo?.id, () => {
 }
 
 .chat-column {
-  max-width: 780px;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 22px 20px 8px;
+  padding: 8px 28px 12px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -715,88 +673,59 @@ watch(() => userStore.userInfo?.id, () => {
 
 /* ---------- 欢迎页 ---------- */
 .welcome {
-  text-align: center;
-  padding: 48px 16px 26px;
-}
-
-.welcome-orb {
-  width: 84px;
-  height: 84px;
-  margin: 0 auto 18px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #EBF5FF;
-  box-shadow:
-    0 10px 30px rgba(59, 130, 246, 0.12),
-    0 0 0 10px rgba(59, 130, 246, 0.04);
-  animation: orb-float 4s ease-in-out infinite;
-}
-
-.orb-emoji {
-  font-size: 40px;
-  line-height: 1;
-}
-
-@keyframes orb-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+  text-align: left;
+  padding: 56px 4px 8px;
 }
 
 .welcome h3 {
-  margin: 0 0 8px;
-  font-size: 21px;
-  color: #0f172a;
+  margin: 0;
+  max-width: 8em;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: clamp(36px, 5vw, 52px);
+  font-weight: 600;
+  line-height: 1.2;
+  color: #1C3D36;
 }
 
 .welcome-sub {
-  margin: 0 0 26px;
-  font-size: 14px;
-  color: #64748b;
+  margin: 16px 0 0;
+  max-width: 36em;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #5E736C;
 }
 
-.quick-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+.quick-list {
+  display: flex;
+  flex-direction: column;
   max-width: 560px;
-  margin: 0 auto;
-  text-align: left;
-}
-
-@media (max-width: 560px) {
-  .quick-grid {
-    grid-template-columns: 1fr;
-  }
+  margin-top: 32px;
 }
 
 .quick-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  background: #fff;
+  padding: 14px 2px;
+  border: none;
+  border-top: 1px solid #D7E2DC;
+  background: transparent;
   cursor: pointer;
-  font-size: 13.5px;
-  color: #334155;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #1C3D36;
   text-align: left;
   font-family: inherit;
-  transition: all 0.2s ease;
+}
+
+.quick-card:last-child {
+  border-bottom: 1px solid #D7E2DC;
 }
 
 .quick-card:hover {
-  border-color: #93c5fd;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
-  transform: translateY(-2px);
-  color: #1d4ed8;
+  color: #B23A2F;
 }
 
-.qc-icon {
-  font-size: 20px;
-  flex-shrink: 0;
+.quick-card:focus-visible {
+  outline: 2px solid #1C3D36;
+  outline-offset: 2px;
 }
 
 /* ---------- 消息 ---------- */
@@ -823,15 +752,14 @@ watch(() => userStore.userInfo?.id, () => {
 }
 
 .assistant-avatar {
-  color: #fff;
-  background: linear-gradient(135deg, #22c55e, #0d9488);
-  box-shadow: 0 4px 10px rgba(13, 148, 136, 0.3);
+  color: #F4F7F6;
+  background: #1C3D36;
 }
 
 .user-avatar {
-  color: #2563eb;
+  color: #1C3D36;
   background: #fff;
-  border: 1px solid #dbe6f8;
+  border: 1px solid #D7E2DC;
 }
 
 .msg-main {
@@ -955,19 +883,18 @@ watch(() => userStore.userInfo?.id, () => {
 
 .assistant-bubble {
   background: #fff;
-  color: #1e293b;
-  border: 1px solid #e6ebf2;
-  border-top-left-radius: 6px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  color: #1C3D36;
+  border: none;
+  border-left: 3px solid #B23A2F;
+  border-radius: 2px;
   max-width: 100%;
 }
 
 .user-bubble {
-  background: #3B82F6;
-  color: #fff;
-  border-bottom-right-radius: 6px;
+  background: #1C3D36;
+  color: #F4F7F6;
+  border-radius: 2px 14px 14px 14px;
   white-space: pre-wrap;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
 /* 流式光标 */
@@ -1237,16 +1164,24 @@ watch(() => userStore.userInfo?.id, () => {
   max-width: 780px;
   margin: 0 auto;
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
+  border: 1px solid #D7E2DC;
+  border-radius: 2px;
   padding: 10px 12px 8px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .input-panel:focus-within {
-  border-color: #93c5fd;
-  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+  border-color: #1C3D36;
+  box-shadow: 0 0 0 1px #1C3D36;
+}
+
+.input-buttons :deep(.el-button--primary) {
+  --el-button-bg-color: #B23A2F;
+  --el-button-border-color: #B23A2F;
+  --el-button-hover-bg-color: #8E2E25;
+  --el-button-hover-border-color: #8E2E25;
+  --el-button-active-bg-color: #8E2E25;
+  --el-button-active-border-color: #8E2E25;
+  border-radius: 2px;
 }
 
 .chat-textarea :deep(.el-textarea__inner) {
@@ -1294,5 +1229,31 @@ watch(() => userStore.userInfo?.id, () => {
 
 .input-buttons .el-button {
   margin: 0;
+}
+
+@media (max-width: 768px) {
+  .ai-chat-page {
+    height: calc(100vh - 56px);
+  }
+
+  .chat-header,
+  .chat-column,
+  .chat-footer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .welcome {
+    padding-top: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-cursor,
+  .label-dot,
+  .dot,
+  .think-pulse {
+    animation: none;
+  }
 }
 </style>

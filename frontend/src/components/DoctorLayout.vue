@@ -35,7 +35,7 @@
       </el-menu>
 
       <div class="sidebar-footer">
-        <el-button class="switch-btn" text @click="router.push('/app/dashboard')">
+        <el-button class="switch-btn" text @click="router.push('/app/ai-chat')">
           <el-icon><Switch /></el-icon>
           <span>切换到用户端</span>
         </el-button>
@@ -103,7 +103,7 @@
             </el-button>
             <div class="welcome-area">
               <h2 class="welcome-title">欢迎，{{ doctorName }}医生 👋</h2>
-              <p class="welcome-subtitle">{{ doctorInfo?.hospital || '健康管理系统' }} · {{ doctorInfo?.department || '' }}{{ doctorInfo?.title ? ' · ' + doctorInfo.title : '' }}</p>
+              <p class="welcome-subtitle">{{ doctorInfo?.hospital || '医学问答' }} · {{ doctorInfo?.department || '' }}{{ doctorInfo?.title ? ' · ' + doctorInfo.title : '' }}</p>
             </div>
           </div>
           <div class="user-info">
@@ -168,7 +168,7 @@ const fetchDoctorInfo = async () => {
 
 const switchToUser = () => {
   drawerVisible.value = false
-  router.push('/app/dashboard')
+  router.push('/app/ai-chat')
 }
 
 const handleLogout = async () => {

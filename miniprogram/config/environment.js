@@ -1,7 +1,7 @@
 // 地址集中配置；此文件会打包到客户端，只能放公开地址，不能放密钥。
 const environments = {
   // 同一 Wi-Fi 的开发版真机访问本机后端；电脑 IP 变化时更新这里并重新上传开发版。
-  develop: 'http://10.101.128.92:8080',
+  develop: 'http://10.101.6.151:8080',
   trial: 'https://api.zpew.top',
   release: 'https://api.zpew.top'
 }

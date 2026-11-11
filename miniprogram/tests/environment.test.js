@@ -12,7 +12,7 @@ function wxApi(envVersion, platform) {
 test('only developer tools in develop use localhost', () => {
   assert.equal(resolveBaseUrl(wxApi('develop', 'devtools')), 'http://localhost:8080')
   for (const platform of ['ios', 'android']) {
-    assert.equal(resolveBaseUrl(wxApi('develop', platform)), 'http://10.101.128.92:8080')
+    assert.equal(resolveBaseUrl(wxApi('develop', platform)), 'http://10.101.6.151:8080')
   }
 })
 
